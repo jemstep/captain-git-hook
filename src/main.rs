@@ -1,6 +1,8 @@
 use std::path::PathBuf;
 use structopt::StructOpt;
 use std::error::Error;
+use std::fs::File;
+use std::io::prelude::*;
 
 mod git;
 mod policies;
@@ -12,6 +14,9 @@ enum Opt {
     /// Git hook called before opening an editor with a commit message
     #[structopt(name = "prepare-commit-msg")]
     PrepareCommitMsg(PrepareCommitMsg),
+
+    #[structopt(name = "install-hooks")]
+    InstallHooks,
 }
 
 #[derive(Debug, StructOpt)]
@@ -28,7 +33,8 @@ fn main() -> Result<(), Box<Error>> {
     let opt = Opt::from_args();
 
     match opt {
-        Opt::PrepareCommitMsg(x) => prepare_commit_msg(x)
+        Opt::PrepareCommitMsg(x) => prepare_commit_msg(x),
+        Opt::InstallHooks => install_hooks(),
     }
 }
 
@@ -43,3 +49,19 @@ fn prepare_commit_msg(opt: PrepareCommitMsg) -> Result<(), Box<Error>> {
     }
 }
 
+fn install_hooks() -> Result<(), Box<Error>> {
+    use git2::Repository;
+    use std::os::unix::fs::PermissionsExt;
+
+    let git_repo = Repository::discover("./")?;
+    let dotgit_dir = git_repo.path();
+    let hook_dir = dotgit_dir.join("hooks");
+
+    let mut prepare_commit_msg = File::create(hook_dir.join("prepare-commit-msg"))?;
+    prepare_commit_msg.set_permissions(PermissionsExt::from_mode(0o750));
+
+    writeln!(prepare_commit_msg, "#!/bin/sh");
+    writeln!(prepare_commit_msg, "captain-git-hook prepare-commit-msg \"$@\"");
+
+    Ok(())
+}
