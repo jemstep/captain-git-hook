@@ -58,10 +58,10 @@ fn install_hooks() -> Result<(), Box<Error>> {
     let hook_dir = dotgit_dir.join("hooks");
 
     let mut prepare_commit_msg = File::create(hook_dir.join("prepare-commit-msg"))?;
-    prepare_commit_msg.set_permissions(PermissionsExt::from_mode(0o750));
+    prepare_commit_msg.set_permissions(PermissionsExt::from_mode(0o750))?;
 
-    writeln!(prepare_commit_msg, "#!/bin/sh");
-    writeln!(prepare_commit_msg, "captain-git-hook prepare-commit-msg \"$@\"");
+    writeln!(prepare_commit_msg, "#!/bin/sh")?;
+    writeln!(prepare_commit_msg, "captain-git-hook prepare-commit-msg \"$@\"")?;
 
     Ok(())
 }
