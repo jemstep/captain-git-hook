@@ -1,5 +1,5 @@
 [package]
-name = "captain-git-hook"
+name = "capn"
 version = "0.1.0"
 authors = ["Justin Worthe <justin@jemstep.com>"]
 edition = "2018"

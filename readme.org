@@ -15,7 +15,7 @@ To get started, go to your Git repo and run the ~install-hooks~
 command.
 
 #+BEGIN_SRC shell
-  captain-git-hook install-hooks
+  capn install-hooks
 #+END_SRC
 
 ** License
