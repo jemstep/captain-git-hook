@@ -6,6 +6,7 @@ use std::io::prelude::*;
 
 mod git;
 mod policies;
+mod config;
 use crate::policies::*;
 
 #[derive(Debug, StructOpt)]
@@ -31,6 +32,8 @@ struct PrepareCommitMsg {
 
 fn main() -> Result<(), Box<Error>> {
     let opt = Opt::from_args();
+    let config = git::read_config();
+    println!("The config read for this command: {:?}", config);
 
     match opt {
         Opt::PrepareCommitMsg(x) => prepare_commit_msg(x),

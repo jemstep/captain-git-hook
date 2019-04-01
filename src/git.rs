@@ -3,6 +3,8 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::error::Error;
 
+use crate::config::*;
+
 /// Uses libgit to get the name of your current branch
 pub fn get_current_branch() -> Result<String, git2::Error> {
     let git_repo = Repository::discover("./")?;
@@ -15,10 +17,10 @@ pub fn get_current_branch() -> Result<String, git2::Error> {
 }
 
 
-pub fn read_config() -> Result<String, Box<Error>> {
+pub fn read_config() -> Result<Config, Box<Error>> {
     let repo = Repository::discover("./")?;
 
-    if let Some(working_dir) = repo.workdir()  {
+    let config_str = if let Some(working_dir) = repo.workdir()  {
         let mut read_file = File::open(working_dir.join(".capn"))?;
         let mut current_contents = String::new();
         read_file.read_to_string(&mut current_contents)?;
@@ -33,5 +35,8 @@ pub fn read_config() -> Result<String, Box<Error>> {
         } else {
             Err(Box::new(git2::Error::from_str("Config is not a blob")))
         }
-    }
+    }?;
+
+    let config = Config::from_toml_string(&config_str)?;
+    Ok(config)
 }

@@ -1,1 +1,6 @@
-foo = bar
+[prepend_branch_name]
+
+
+[example_complex_config]
+command = "cargo build"
+repeats = 5
