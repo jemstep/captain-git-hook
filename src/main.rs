@@ -7,7 +7,9 @@ use std::io::prelude::*;
 mod git;
 mod policies;
 mod config;
+
 use crate::policies::*;
+use crate::config::Config;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "Captain Git Hook", about = "A collection of tools for more opinionated Git usage")]
@@ -35,18 +37,21 @@ struct PrepareCommitMsg {
 
 fn main() -> Result<(), Box<Error>> {
     let opt = Opt::from_args();
-    let config = git::read_config();
-    println!("The config read for this command: {:?}", config);
+    let config = git::read_config()?;
 
     match opt {
-        Opt::PrepareCommitMsg(x) => prepare_commit_msg(x),
+        Opt::PrepareCommitMsg(x) => prepare_commit_msg(x, config),
         Opt::InstallHooks => install_hooks(),
     }
 }
 
-fn prepare_commit_msg(opt: PrepareCommitMsg) -> Result<(), Box<Error>> {
+fn prepare_commit_msg(opt: PrepareCommitMsg, config: Config) -> Result<(), Box<Error>> {
     if opt.commit_source.is_none() {
-        prepend_branch_name(opt.commit_file)
+        if let Some(_) = config.prepend_branch_name {
+            prepend_branch_name(opt.commit_file)?;
+        }
+
+        Ok(())
     } else {
         // do nothing silently. This comes up on merge commits,
         // ammendment commits, if a message was specified on the
