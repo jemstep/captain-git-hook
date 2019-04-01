@@ -28,6 +28,9 @@ struct PrepareCommitMsg {
     /// The source of the commit
     #[structopt()]
     commit_source: Option<String>,
+    /// The SHA-1 of an existing commit (if -c, -C or --amend are being used with a commit)
+    #[structopt()]
+    existing_commit: Option<String>,
 }
 
 fn main() -> Result<(), Box<Error>> {
