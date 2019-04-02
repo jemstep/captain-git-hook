@@ -18,6 +18,11 @@ enum Opt {
     #[structopt(name = "prepare-commit-msg")]
     PrepareCommitMsg(PrepareCommitMsg),
 
+    /// Git hook called on the server before updating any references
+    #[structopt(name = "pre-receive")]
+    PreReceive,
+
+    /// Installs the required Git Hooks in the current repo
     #[structopt(name = "install-hooks")]
     InstallHooks,
 }
@@ -41,6 +46,7 @@ fn main() -> Result<(), Box<Error>> {
 
     match opt {
         Opt::PrepareCommitMsg(x) => prepare_commit_msg(x, config),
+        Opt::PreReceive => pre_receive(config),
         Opt::InstallHooks => install_hooks(),
     }
 }
@@ -58,6 +64,10 @@ fn prepare_commit_msg(opt: PrepareCommitMsg, config: Config) -> Result<(), Box<E
         // cli.
         Ok(())
     }
+}
+
+fn pre_receive(_config: Config) -> Result<(), Box<Error>> {
+    Ok(())
 }
 
 fn install_hooks() -> Result<(), Box<Error>> {
