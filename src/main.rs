@@ -25,6 +25,10 @@ enum Opt {
     /// Installs the required Git Hooks in the current repo
     #[structopt(name = "install-hooks")]
     InstallHooks,
+
+    /// Logs the current configuration and exists
+    #[structopt(name = "debug")]
+    Debug
 }
 
 #[derive(Debug, StructOpt)]
@@ -48,6 +52,7 @@ fn main() -> Result<(), Box<Error>> {
         Opt::PrepareCommitMsg(x) => prepare_commit_msg(x, config),
         Opt::PreReceive => pre_receive(config),
         Opt::InstallHooks => install_hooks(),
+        Opt::Debug => debug(config)
     }
 }
 
@@ -83,6 +88,13 @@ fn install_hooks() -> Result<(), Box<Error>> {
 
     writeln!(prepare_commit_msg, "#!/bin/sh")?;
     writeln!(prepare_commit_msg, "capn prepare-commit-msg \"$@\"")?;
+
+    Ok(())
+}
+
+fn debug(config: Config) -> Result<(), Box<Error>> {
+    println!("Captain Git Hook called with the following configuration:");
+    println!("{:#?}", config);
 
     Ok(())
 }
