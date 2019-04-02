@@ -10,6 +10,7 @@ mod config;
 
 use crate::policies::*;
 use crate::config::Config;
+use crate::git::GitRepo;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "Captain Git Hook", about = "A collection of tools for more opinionated Git usage")]
@@ -46,7 +47,7 @@ struct PrepareCommitMsg {
 
 fn main() -> Result<(), Box<Error>> {
     let opt = Opt::from_args();
-    let config = git::read_config()?;
+    let config = git::read_config::<GitRepo>()?;
 
     match opt {
         Opt::PrepareCommitMsg(x) => prepare_commit_msg(x, config),
