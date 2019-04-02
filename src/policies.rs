@@ -10,7 +10,6 @@ pub fn prepend_branch_name(commit_file: PathBuf) -> Result<(), Box<Error>> {
     Ok(prepend_string_to_file(branch, commit_file)?)
 }
 
-
 fn prepend_string_to_file(s: String, filename: PathBuf) -> Result<(), std::io::Error> {
     // It turns out that prepending a string to a file is not an
     // obvious action. You can only write to the end of a file :(
@@ -27,4 +26,8 @@ fn prepend_string_to_file(s: String, filename: PathBuf) -> Result<(), std::io::E
 
     writeln!(write_file, "{}:", s)?;
     write!(write_file, "{}", current_contents)
+}
+
+pub fn verify_git_commits(_new_value: String) -> Result<(), Box<Error>> {
+    Ok(())
 }

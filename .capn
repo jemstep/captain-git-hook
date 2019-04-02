@@ -1,5 +1,8 @@
 [prepend_branch_name]
 
+[verify_git_commits]
+author_domain = ""
+committer_domain = ""
 
 [example_complex_config]
 command = "cargo build"
