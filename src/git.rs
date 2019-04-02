@@ -73,6 +73,7 @@ mod test {
             config,
             Config {
                 prepend_branch_name: None,
+                verify_git_commits: None,
                 example_complex_config: None
             }
         );
