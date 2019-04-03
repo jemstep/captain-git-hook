@@ -4,6 +4,7 @@ use std::error::Error;
 use std::fs::File;
 use std::io::prelude::*;
 use std::process::exit;
+use git2::Repository;
 
 mod git;
 mod gpg;
@@ -12,7 +13,7 @@ mod config;
 
 use crate::policies::*;
 use crate::config::Config;
-use crate::git::GitRepo;
+use crate::git::{LiveGit, Git};
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "Captain Git Hook", about = "A collection of tools for more opinionated Git usage")]
@@ -49,7 +50,7 @@ struct PrepareCommitMsg {
 
 fn main() -> Result<(), Box<Error>> {
     let opt = Opt::from_args();
-    let config = match git::read_config::<GitRepo>() {
+    let config = match LiveGit::new()?.read_config() {
         Ok(c) => c,
         Err(e) => {
             eprintln!("Error: Failed to read the .capn config file.");
@@ -86,7 +87,6 @@ fn pre_receive(_config: Config) -> Result<(), Box<Error>> {
 }
 
 fn install_hooks() -> Result<(), Box<Error>> {
-    use git2::Repository;
     use std::os::unix::fs::PermissionsExt;
 
     let git_repo = Repository::discover("./")?;

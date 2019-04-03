@@ -6,7 +6,8 @@ use std::path::PathBuf;
 use std::io::prelude::*;
 
 pub fn prepend_branch_name(commit_file: PathBuf) -> Result<(), Box<Error>> {
-    let branch = get_current_branch()?;
+    let git = LiveGit::new()?;
+    let branch = git.current_branch()?;
     Ok(prepend_string_to_file(branch, commit_file)?)
 }
 
