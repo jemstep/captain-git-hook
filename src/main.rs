@@ -3,6 +3,7 @@ use structopt::StructOpt;
 use std::error::Error;
 use std::fs::File;
 use std::io::prelude::*;
+use std::process::exit;
 
 mod git;
 mod gpg;
@@ -48,7 +49,14 @@ struct PrepareCommitMsg {
 
 fn main() -> Result<(), Box<Error>> {
     let opt = Opt::from_args();
-    let config = git::read_config::<GitRepo>()?;
+    let config = match git::read_config::<GitRepo>() {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("Error: Failed to read the .capn config file.");
+            eprintln!("{}", e);
+            exit(1);
+        }
+    };
 
     match opt {
         Opt::PrepareCommitMsg(x) => prepare_commit_msg(x, config),

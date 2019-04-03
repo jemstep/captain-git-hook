@@ -25,10 +25,10 @@ impl Git for GitRepo {
             if let Some(blob) = obj.as_blob() {
                 match String::from_utf8(blob.content().to_vec()) {
                     Ok(config_str) => Ok(config_str),
-                    Err(e) => Err(Box::new(git2::Error::from_str(&format!("Config file is not UTF-8 encoded: {}", e))))
+                    Err(e) => Err(Box::new(git2::Error::from_str(&format!("File is not UTF-8 encoded. {}", e))))
                 }
             } else {
-                Err(Box::new(git2::Error::from_str("Config is not a blob")))
+                Err(Box::new(git2::Error::from_str("File path does not refer to a file")))
             }
         }
     }
