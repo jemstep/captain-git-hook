@@ -1,4 +1,5 @@
 use std::error::Error;
+use std::process::Command;
 
 pub trait Gpg {
     fn fingerprints() -> Result<String, Box<Error>>;
@@ -8,7 +9,12 @@ pub struct GpgServer {}
 
 impl Gpg for GpgServer {
     fn fingerprints() -> Result<String, Box<Error>> {
-        Ok(String::from("fakestring"))
+        let result = Command::new("gpg")
+        .arg("--fingerprint")
+        .output()
+        .expect("failed to execute gpg");
+        let encoded = String::from_utf8(result.stdout).unwrap();
+        Ok(encoded)
     }
 }
 
