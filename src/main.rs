@@ -5,6 +5,7 @@ use std::fs::File;
 use std::io::prelude::*;
 
 mod git;
+mod gpg;
 mod policies;
 mod config;
 
