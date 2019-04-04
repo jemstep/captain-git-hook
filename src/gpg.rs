@@ -1,8 +1,11 @@
 use std::error::Error;
-use std::process::Command;
+use std::process::*;
+
+use crate::config::*;
 
 pub trait Gpg {
     fn fingerprints(&self) -> Result<Vec<String>, Box<Error>>;
+    fn receive_keys(&self, key_server: &str, fingerprints: &Vec<String>) -> Result<Option<ExitStatus>, Box<Error>>;
 }
 
 pub struct LiveGpg {}
@@ -16,10 +19,19 @@ impl Gpg for LiveGpg {
         let encoded = String::from_utf8(result.stdout)?;
         let per_line = encoded.split('\n')
             .filter(|s| s.starts_with("fpr"))
-            .map(|s| String::from(s.split(':').nth(9).unwrap()))
+            .filter_map(|s| s.split(':').nth(9).map(String::from))
             .collect::<Vec<_>>();
 
         Ok(per_line)
+    }
+
+     fn receive_keys(&self, key_server: &str, fingerprints: &Vec<String>) -> Result<Option<ExitStatus>, Box<Error>> {
+        let result = Command::new("gpg")
+            .arg(format!("{} {}","--keyserver", key_server))
+            .arg("--recv-keys ")
+            .status()?;
+
+        Ok(Some(result))
     }
 }
 
@@ -31,6 +43,9 @@ mod test {
     impl Gpg for MockGpg {
         fn fingerprints(&self) -> Result<Vec<String>, Box<Error>> {
             Ok(vec!(String::from("FF4666522286636A9dfge31AE5572467777449DBF6")))
+        }
+        fn receive_keys(&self, key_server: &str, fingerprints: &Vec<String>) -> Result<Option<ExitStatus>, Box<Error>> {
+            Ok(None)
         }
     }
 

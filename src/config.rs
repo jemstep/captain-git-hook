@@ -18,7 +18,8 @@ pub struct ExampleComplexConfig {
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct VerifyGitCommitsConfig {
     pub author_domain: String,
-    pub committer_domain: String
+    pub committer_domain: String,
+    pub keyserver: String
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]

@@ -3,6 +3,7 @@
 [verify_git_commits]
 author_domain = ""
 committer_domain = ""
+keyserver = ""
 
 [example_complex_config]
 command = "cargo build"
