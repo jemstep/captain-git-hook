@@ -2,25 +2,29 @@ use std::error::Error;
 use std::process::Command;
 
 pub trait Gpg {
-    fn fingerprints() -> Result<String, Box<Error>>;
+    fn fingerprints() -> Result<Vec<String>, Box<Error>>;
 }
 
 pub struct GpgServer {}
 
 impl Gpg for GpgServer {
-    fn fingerprints() -> Result<String, Box<Error>> {
+    fn fingerprints() -> Result<Vec<String>, Box<Error>> {
         let result = Command::new("gpg")
-        .arg("--fingerprint")
-        .output()
-        .expect("failed to execute gpg");
-        let encoded = String::from_utf8(result.stdout).unwrap();
-        Ok(encoded)
+            .arg("--with-colons")
+            .arg("--fingerprint")
+            .output()?;
+        let encoded = String::from_utf8(result.stdout)?;
+        let per_line = encoded.split('\n')
+            .filter(|s| s.starts_with("fpr"))
+            .map(|s| String::from(s.split(':').nth(9).unwrap()))
+            .collect::<Vec<_>>();
+
+        Ok(per_line)
     }
 }
 
-pub fn fingerprints<G: Gpg>() -> Result<String, Box<Error>> {
-    let result = G::fingerprints()?;
-    Ok(result)
+pub fn fingerprints<G: Gpg>() -> Result<Vec<String>, Box<Error>> {
+    G::fingerprints()    
 }
 
 #[cfg(test)]
@@ -29,14 +33,14 @@ mod test {
 
     pub struct MockGpg {}
     impl Gpg for MockGpg {
-        fn fingerprints() -> Result<String, Box<Error>> {
-            Ok(String::from(""))
+        fn fingerprints() -> Result<Vec<String>, Box<Error>> {
+            Ok(vec!(String::from("")))
         }
     }
 
     #[test]
     fn list_fingerprints() {
         let result = fingerprints::<MockGpg>().unwrap();
-        assert_eq!(String::from(""), result);
+        assert_eq!(vec!(String::from("")), result);
     }
 }
