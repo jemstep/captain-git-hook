@@ -2,13 +2,13 @@ use std::error::Error;
 use std::process::Command;
 
 pub trait Gpg {
-    fn fingerprints() -> Result<Vec<String>, Box<Error>>;
+    fn fingerprints(&self) -> Result<Vec<String>, Box<Error>>;
 }
 
-pub struct GpgServer {}
+pub struct LiveGpg {}
 
-impl Gpg for GpgServer {
-    fn fingerprints() -> Result<Vec<String>, Box<Error>> {
+impl Gpg for LiveGpg {
+    fn fingerprints(&self) -> Result<Vec<String>, Box<Error>> {
         let result = Command::new("gpg")
             .arg("--with-colons")
             .arg("--fingerprint")
@@ -23,24 +23,20 @@ impl Gpg for GpgServer {
     }
 }
 
-pub fn fingerprints<G: Gpg>() -> Result<Vec<String>, Box<Error>> {
-    G::fingerprints()    
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
 
     pub struct MockGpg {}
     impl Gpg for MockGpg {
-        fn fingerprints() -> Result<Vec<String>, Box<Error>> {
-            Ok(vec!(String::from("")))
+        fn fingerprints(&self) -> Result<Vec<String>, Box<Error>> {
+            Ok(vec!(String::from("FF4666522286636A9dfge31AE5572467777449DBF6")))
         }
     }
 
     #[test]
     fn list_fingerprints() {
-        let result = fingerprints::<MockGpg>().unwrap();
-        assert_eq!(vec!(String::from("")), result);
+        let result = (MockGpg{}).fingerprints().unwrap();
+        assert_eq!(vec!(String::from("FF4666522286636A9dfge31AE5572467777449DBF6")), result);
     }
 }
