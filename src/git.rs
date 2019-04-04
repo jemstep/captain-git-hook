@@ -7,6 +7,8 @@ use crate::config::*;
 
 pub trait Git {
     fn read_file(&self, path: &str) -> Result<String, Box<Error>>;
+    fn write_git_file(&self, path: &str, contents: &str) -> Result<(), Box<Error>>;
+    
     fn current_branch(&self) -> Result<String, Box<Error>>;
     
     fn read_config(&self) -> Result<Config, Box<Error>> {
@@ -49,6 +51,17 @@ impl Git for LiveGit {
         }
     }
 
+    fn write_git_file(&self, path: &str, contents: &str) -> Result<(), Box<Error>> {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dotgit_dir = self.repo.path();
+        let mut file = File::create(dotgit_dir.join(path))?;
+        file.set_permissions(PermissionsExt::from_mode(0o750))?;
+        file.write_all(contents.as_bytes())?;
+
+        Ok(())
+    }
+
     fn current_branch(&self) -> Result<String, Box<Error>> {
         let head = self.repo.head()?;
         let head_name =  head.shorthand();
@@ -70,6 +83,9 @@ mod test {
         }
         fn current_branch(&self) -> Result<String, Box<Error>> {
             Ok(String::from("master"))
+        }
+        fn write_git_file(&self, path: &str, contents: &str) -> Result<(), Box<Error>> {
+            Ok(())
         }
     }
 

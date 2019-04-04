@@ -87,18 +87,10 @@ fn pre_receive(_config: Config) -> Result<(), Box<Error>> {
 }
 
 fn install_hooks() -> Result<(), Box<Error>> {
-    use std::os::unix::fs::PermissionsExt;
-
-    let git_repo = Repository::discover("./")?;
-    let dotgit_dir = git_repo.path();
-    let hook_dir = dotgit_dir.join("hooks");
-
-    let mut prepare_commit_msg = File::create(hook_dir.join("prepare-commit-msg"))?;
-    prepare_commit_msg.set_permissions(PermissionsExt::from_mode(0o750))?;
-
-    writeln!(prepare_commit_msg, "#!/bin/sh")?;
-    writeln!(prepare_commit_msg, "capn prepare-commit-msg \"$@\"")?;
-
+    let repo = LiveGit::new()?;
+    repo.write_git_file("hooks/prepare-commit-msg", r#"#!/bin/sh
+capn prepare-commit-msg "$@""#)?;
+    
     Ok(())
 }
 
