@@ -6,14 +6,9 @@ use std::io::prelude::*;
 use std::process::exit;
 use git2::Repository;
 
-mod git;
-mod gpg;
-mod policies;
-mod config;
-
-use crate::policies::*;
-use crate::config::Config;
-use crate::git::{LiveGit, Git};
+use capn::policies::*;
+use capn::config::Config;
+use capn::git::{LiveGit, Git};
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "Captain Git Hook", about = "A collection of tools for more opinionated Git usage")]
