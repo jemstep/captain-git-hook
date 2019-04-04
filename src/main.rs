@@ -1,18 +1,13 @@
-use std::path::PathBuf;
 use structopt::StructOpt;
 use std::error::Error;
-use std::fs::File;
-use std::io::prelude::*;
 use std::process::exit;
-use git2::Repository;
 
-use capn::policies::*;
-use capn::config::Config;
 use capn::git::{LiveGit, Git};
+use capn::*;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "Captain Git Hook", about = "A collection of tools for more opinionated Git usage")]
-enum Opt {
+pub enum Opt {
     /// Git hook called before opening an editor with a commit message
     #[structopt(name = "prepare-commit-msg")]
     PrepareCommitMsg(PrepareCommitMsg),
@@ -28,19 +23,6 @@ enum Opt {
     /// Logs the current configuration and exists
     #[structopt(name = "debug")]
     Debug
-}
-
-#[derive(Debug, StructOpt)]
-struct PrepareCommitMsg {
-    /// Commit file currently prepared by git
-    #[structopt(parse(from_os_str))]
-    commit_file: PathBuf,
-    /// The source of the commit
-    #[structopt()]
-    commit_source: Option<String>,
-    /// The SHA-1 of an existing commit (if -c, -C or --amend are being used with a commit)
-    #[structopt()]
-    existing_commit: Option<String>,
 }
 
 fn main() -> Result<(), Box<Error>> {
@@ -60,38 +42,4 @@ fn main() -> Result<(), Box<Error>> {
         Opt::InstallHooks => install_hooks(),
         Opt::Debug => debug(config)
     }
-}
-
-fn prepare_commit_msg(opt: PrepareCommitMsg, config: Config) -> Result<(), Box<Error>> {
-    if opt.commit_source.is_none() {
-        if let Some(_) = config.prepend_branch_name {
-            prepend_branch_name(opt.commit_file)?;
-        }
-
-        Ok(())
-    } else {
-        // do nothing silently. This comes up on merge commits,
-        // ammendment commits, if a message was specified on the
-        // cli.
-        Ok(())
-    }
-}
-
-fn pre_receive(_config: Config) -> Result<(), Box<Error>> {
-    Ok(())
-}
-
-fn install_hooks() -> Result<(), Box<Error>> {
-    let repo = LiveGit::new()?;
-    repo.write_git_file("hooks/prepare-commit-msg", r#"#!/bin/sh
-capn prepare-commit-msg "$@""#)?;
-    
-    Ok(())
-}
-
-fn debug(config: Config) -> Result<(), Box<Error>> {
-    println!("Captain Git Hook called with the following configuration:");
-    println!("{:#?}", config);
-
-    Ok(())
 }

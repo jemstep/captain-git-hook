@@ -84,7 +84,7 @@ mod test {
         fn current_branch(&self) -> Result<String, Box<Error>> {
             Ok(String::from("master"))
         }
-        fn write_git_file(&self, path: &str, contents: &str) -> Result<(), Box<Error>> {
+        fn write_git_file(&self, _path: &str, _contents: &str) -> Result<(), Box<Error>> {
             Ok(())
         }
     }
