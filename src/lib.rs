@@ -10,6 +10,7 @@ pub mod git;
 pub mod gpg;
 pub mod policies;
 pub mod config;
+mod error;
 
 #[derive(Debug, StructOpt)]
 pub struct PrepareCommitMsg {

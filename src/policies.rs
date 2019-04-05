@@ -30,5 +30,7 @@ fn prepend_string_to_file(s: String, filename: PathBuf) -> Result<(), std::io::E
 }
 
 pub fn verify_git_commits(_new_value: String) -> Result<(), Box<Error>> {
+    //get fingerprints source data
+    //receive keys from keyserver
     Ok(())
 }

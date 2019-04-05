@@ -1,11 +1,10 @@
 use std::error::Error;
 use std::process::*;
-
-use crate::config::*;
+use crate::error::CapnError;
 
 pub trait Gpg {
     fn fingerprints(&self) -> Result<Vec<String>, Box<Error>>;
-    fn receive_keys(&self, key_server: &str, fingerprints: &Vec<String>) -> Result<Option<ExitStatus>, Box<Error>>;
+    fn receive_keys(&self, key_server: &str, fingerprints: &[String]) -> Result<(), Box<Error>>;
 }
 
 pub struct LiveGpg {}
@@ -25,13 +24,20 @@ impl Gpg for LiveGpg {
         Ok(per_line)
     }
 
-     fn receive_keys(&self, key_server: &str, fingerprints: &Vec<String>) -> Result<Option<ExitStatus>, Box<Error>> {
+     fn receive_keys(&self, key_server: &str, fingerprints: &[String]) -> Result<(), Box<Error>> {
+        let joined_fingerprints = fingerprints.join(" ");
+        println!("Joined fingerprints {}",joined_fingerprints );
         let result = Command::new("gpg")
-            .arg(format!("{} {}","--keyserver", key_server))
-            .arg("--recv-keys ")
+            .args(&["--keyserver",key_server])
+            .arg("--recv-keys")
+            .args(fingerprints)
             .status()?;
 
-        Ok(Some(result))
+            if result.success() {
+                Ok(())
+            } else {
+                Err(Box::new(CapnError::new(format!("Call to GPG keyserver failed with code {:?}", result.code()))))
+            }
     }
 }
 
@@ -42,16 +48,16 @@ mod test {
     pub struct MockGpg {}
     impl Gpg for MockGpg {
         fn fingerprints(&self) -> Result<Vec<String>, Box<Error>> {
-            Ok(vec!(String::from("FF4666522286636A9dfge31AE5572467777449DBF6")))
+            Ok(vec!(String::from("111111111111111111111111111111111111111111")))
         }
-        fn receive_keys(&self, key_server: &str, fingerprints: &Vec<String>) -> Result<Option<ExitStatus>, Box<Error>> {
-            Ok(None)
+        fn receive_keys(&self, key_server: &str, fingerprints: &[String]) -> Result<(), Box<Error>> {
+            Ok(())
         }
     }
 
     #[test]
     fn list_fingerprints() {
         let result = (MockGpg{}).fingerprints().unwrap();
-        assert_eq!(vec!(String::from("FF4666522286636A9dfge31AE5572467777449DBF6")), result);
+        assert_eq!(vec!(String::from("111111111111111111111111111111111111111111")), result);
     }
 }
