@@ -6,6 +6,7 @@ use crate::policies::*;
 use crate::config::Config;
 use crate::git::{LiveGit, Git};
 
+
 pub mod git;
 pub mod gpg;
 pub mod policies;
@@ -41,7 +42,13 @@ pub fn prepare_commit_msg(opt: PrepareCommitMsg, config: Config) -> Result<(), B
     }
 }
 
-pub fn pre_receive(_config: Config) -> Result<(), Box<Error>> {
+pub fn pre_receive(config: Config, new_value: &str) -> Result<(), Box<Error>> {
+    match config.verify_git_commits {
+            Some(c) => {
+                verify_git_commits(new_value, &c.team_fingerprints_file , &c.keyserver)?;
+            },
+            None => println!("{}", "verify_git_commits config not found")
+        };
     Ok(())
 }
 

@@ -4,6 +4,7 @@
 author_domain = ""
 committer_domain = ""
 keyserver = ""
+team_fingerprints_file = ""
 
 [example_complex_config]
 command = "cargo build"

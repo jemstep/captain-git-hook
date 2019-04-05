@@ -13,7 +13,7 @@ fn fingerprints_exist() {
 #[ignore("This test takes a long time to run")]
 fn receive_keys() {
     let fingerprints = ["111111111111111111111111111111111111111111".to_string(), "111111111111111111111111111111111111111111".to_string()];
-    let result = (LiveGpg{}).receive_keys("",&fingerprints);
+    let result = (LiveGpg{}).receive_keys("keyserver",&fingerprints);
     //let exitStatus = result.map;
 
     println!("Status {:?}", result);

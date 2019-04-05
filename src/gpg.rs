@@ -25,8 +25,7 @@ impl Gpg for LiveGpg {
     }
 
      fn receive_keys(&self, key_server: &str, fingerprints: &[String]) -> Result<(), Box<Error>> {
-        let joined_fingerprints = fingerprints.join(" ");
-        println!("Joined fingerprints {}",joined_fingerprints );
+        println!("Fingerprints {:?}",fingerprints);
         let result = Command::new("gpg")
             .args(&["--keyserver",key_server])
             .arg("--recv-keys")

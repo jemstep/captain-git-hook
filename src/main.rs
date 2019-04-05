@@ -38,7 +38,7 @@ fn main() -> Result<(), Box<Error>> {
 
     match opt {
         Opt::PrepareCommitMsg(x) => prepare_commit_msg(x, config),
-        Opt::PreReceive => pre_receive(config),
+        Opt::PreReceive => pre_receive(config, "new_value"),
         Opt::InstallHooks => install_hooks(),
         Opt::Debug => debug(config)
     }
