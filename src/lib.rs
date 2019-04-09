@@ -45,12 +45,9 @@ pub fn prepare_commit_msg(opt: PrepareCommitMsg, config: Config) -> Result<(), B
 }
 
 pub fn pre_receive(config: Config, new_value: &str) -> Result<(), Box<Error>> {
-    match config.verify_git_commits {
-            Some(c) => {
-                verify_git_commits(new_value, &c.team_fingerprints_file , &c.keyserver)?;
-            },
-            None => println!("{}", "verify_git_commits config not found")
-        };
+    if let Some(c) = config.verify_git_commits {
+        verify_git_commits(new_value, &c.team_fingerprints_file , &c.keyserver)?;
+    }
     Ok(())
 }
 
@@ -60,18 +57,5 @@ pub fn install_hooks() -> Result<(), Box<Error>> {
 capn prepare-commit-msg "$@"
 "#)?;
     
-    Ok(())
-}
-
-pub fn debug(config: Config) -> Result<(), Box<Error>> {
-    error!("Called Debug task");
-    warn!("Called Debug task");
-    info!("Called Debug task");
-    debug!("Called Debug task");
-    trace!("Called Debug task");
-
-    println!("Captain Git Hook called with the following configuration:");
-    println!("{:#?}", config);
-
     Ok(())
 }

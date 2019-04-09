@@ -1,5 +1,3 @@
-extern crate capn;
-
 use capn::gpg::*;
 
 #[test]

@@ -2,6 +2,8 @@ use std::error::Error;
 use std::process::*;
 use crate::error::CapnError;
 
+use log::*;
+
 pub trait Gpg {
     fn fingerprints(&self) -> Result<Vec<String>, Box<Error>>;
     fn receive_keys(&self, key_server: &str, fingerprints: &[String]) -> Result<(), Box<Error>>;
@@ -25,7 +27,7 @@ impl Gpg for LiveGpg {
     }
 
      fn receive_keys(&self, key_server: &str, fingerprints: &[String]) -> Result<(), Box<Error>> {
-        println!("Fingerprints {:?}",fingerprints);
+        trace!("Fingerprints {:?}",fingerprints);
         let result = Command::new("gpg")
             .args(&["--keyserver",key_server])
             .arg("--recv-keys")

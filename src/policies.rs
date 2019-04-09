@@ -5,9 +5,12 @@ use std::error::Error;
 use std::fs::File;
 use std::path::PathBuf;
 use std::io::prelude::*;
-use std::time::{Duration, Instant};
+use std::time::Instant;
+use log::*;
 
 pub fn prepend_branch_name(commit_file: PathBuf) -> Result<(), Box<Error>> {
+    debug!("Executing policy: prepend_branch_name");
+    
     let git = LiveGit::new()?;
     let branch = git.current_branch()?;
     Ok(prepend_string_to_file(branch, commit_file)?)
@@ -32,9 +35,11 @@ fn prepend_string_to_file(s: String, filename: PathBuf) -> Result<(), std::io::E
 }
 
 pub fn verify_git_commits(new_value: &str, team_fingerprints_file: &str, keyserver: &str) -> Result<(), Box<Error>> {
+    debug!("Executing policy: verify_git_commits");
+    
     let start = Instant::now();
-    println!("{}","Verify git commits");
-    println!("{}","Get team fingerprints");
+    
+    trace!("Fetching team fingerprints");
     let git = LiveGit::new()?;
     let fingerprints_file = git.read_file(team_fingerprints_file)?;
     let fingerprints: Vec<String> = fingerprints_file.split('\n')
@@ -43,10 +48,10 @@ pub fn verify_git_commits(new_value: &str, team_fingerprints_file: &str, keyserv
         .filter(|s| !s.is_empty())
         .collect();
 
-    println!("{}","Receive latests keys from key server");
+    trace!("Receive latest keys from key server");
     (LiveGpg{}).receive_keys(keyserver,&fingerprints)?;
     let duration = start.elapsed();
-    println!("Time of verify_git_commits is: {:?}", duration.as_millis());
+    trace!("verify_git_commits completed in: {}ms", duration.as_millis());
     Ok(())
 }
 

@@ -6,6 +6,7 @@ use capn::git::{LiveGit, Git};
 use capn::*;
 
 use stderrlog;
+use log::*;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "Captain Git Hook", about = "A collection of tools for more opinionated Git usage")]
@@ -34,10 +35,6 @@ enum Command {
     /// Installs the required Git Hooks in the current repo
     #[structopt(name = "install-hooks")]
     InstallHooks,
-
-    /// Logs the current configuration and exists
-    #[structopt(name = "debug")]
-    Debug
 }
 
 fn main() -> Result<(), Box<Error>> {
@@ -45,22 +42,22 @@ fn main() -> Result<(), Box<Error>> {
     stderrlog::new()
         .module(module_path!())
         .quiet(opt.quiet)
-        .verbosity(opt.verbose)
+        .verbosity(opt.verbose + 2) // Default is info
         .init()?;
 
     let config = match LiveGit::new()?.read_config() {
         Ok(c) => c,
         Err(e) => {
-            eprintln!("Error: Failed to read the .capn config file.");
-            eprintln!("{}", e);
+            error!("Failed to read the .capn config file: {}", e);
             exit(1);
         }
     };
+
+    debug!("Configuration: {:#?}", config);
 
     match opt.command {
         Command::PrepareCommitMsg(x) => prepare_commit_msg(x, config),
         Command::PreReceive => pre_receive(config, "new_value"),
         Command::InstallHooks => install_hooks(),
-        Command::Debug => debug(config)
     }
 }
