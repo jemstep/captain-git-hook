@@ -9,3 +9,5 @@ git2 = { version = "0.8.0", default-features = false }
 structopt = "0.2.14"
 serde = { version = "1.0.89", features = ["derive"] }
 toml = "0.4.2"
+log = "0.4.6"
+stderrlog = "0.4.1"

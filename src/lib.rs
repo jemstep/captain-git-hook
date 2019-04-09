@@ -2,6 +2,8 @@ use std::error::Error;
 use structopt::StructOpt;
 use std::path::PathBuf;
 
+use log::*;
+
 use crate::policies::*;
 use crate::config::Config;
 use crate::git::{LiveGit, Git};
@@ -62,6 +64,12 @@ capn prepare-commit-msg "$@"
 }
 
 pub fn debug(config: Config) -> Result<(), Box<Error>> {
+    error!("Called Debug task");
+    warn!("Called Debug task");
+    info!("Called Debug task");
+    debug!("Called Debug task");
+    trace!("Called Debug task");
+
     println!("Captain Git Hook called with the following configuration:");
     println!("{:#?}", config);
 

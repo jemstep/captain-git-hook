@@ -5,9 +5,24 @@ use std::process::exit;
 use capn::git::{LiveGit, Git};
 use capn::*;
 
+use stderrlog;
+
 #[derive(Debug, StructOpt)]
 #[structopt(name = "Captain Git Hook", about = "A collection of tools for more opinionated Git usage")]
-pub enum Opt {
+pub struct Opt {
+    /// Silence all output
+    #[structopt(short = "q", long = "quiet")]
+    quiet: bool,
+    /// Verbose mode (-v, -vv, -vvv, etc)
+    #[structopt(short = "v", long = "verbose", parse(from_occurrences))]
+    verbose: usize,
+    /// Command to be run
+    #[structopt(subcommand)]
+    command: Command,
+}
+
+#[derive(Debug, StructOpt)]
+enum Command {
     /// Git hook called before opening an editor with a commit message
     #[structopt(name = "prepare-commit-msg")]
     PrepareCommitMsg(PrepareCommitMsg),
@@ -27,6 +42,12 @@ pub enum Opt {
 
 fn main() -> Result<(), Box<Error>> {
     let opt = Opt::from_args();
+    stderrlog::new()
+        .module(module_path!())
+        .quiet(opt.quiet)
+        .verbosity(opt.verbose)
+        .init()?;
+
     let config = match LiveGit::new()?.read_config() {
         Ok(c) => c,
         Err(e) => {
@@ -36,10 +57,10 @@ fn main() -> Result<(), Box<Error>> {
         }
     };
 
-    match opt {
-        Opt::PrepareCommitMsg(x) => prepare_commit_msg(x, config),
-        Opt::PreReceive => pre_receive(config, "new_value"),
-        Opt::InstallHooks => install_hooks(),
-        Opt::Debug => debug(config)
+    match opt.command {
+        Command::PrepareCommitMsg(x) => prepare_commit_msg(x, config),
+        Command::PreReceive => pre_receive(config, "new_value"),
+        Command::InstallHooks => install_hooks(),
+        Command::Debug => debug(config)
     }
 }
