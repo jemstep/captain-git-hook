@@ -32,6 +32,16 @@ pub struct PrepareCommitMsg {
     pub existing_commit: Option<String>,
 }
 
+#[derive(Debug, StructOpt)]
+pub struct PrePush {
+    /// The name of the destination remote
+    #[structopt()]
+    pub remote_name: String,
+    /// The location of the destination remote
+    #[structopt()]
+    pub remote_location: String,
+}
+
 
 pub fn prepare_commit_msg(opt: PrepareCommitMsg, config: Config) -> Result<(), Box<dyn Error>> {
     if opt.commit_source.is_none() {
@@ -48,7 +58,11 @@ pub fn prepare_commit_msg(opt: PrepareCommitMsg, config: Config) -> Result<(), B
     }
 }
 
-pub fn pre_receive(config: Config, new_value: &str) -> Result<(), Box<Error>> {
+pub fn pre_push(_opt: &PrePush, _config: &Config, _local_ref: &str, _local_sha: &str, _remote_ref: &str, _remote_sha: &str) -> Result<(), Box<dyn Error>> {
+    Ok(())
+}
+
+pub fn pre_receive(config: Config, new_value: &str) -> Result<(), Box<dyn Error>> {
     if let Some(c) = config.verify_git_commits {
         verify_git_commits(new_value, &c.team_fingerprints_file , &c.keyserver)?;
     }

@@ -8,6 +8,9 @@ use capn::*;
 use stderrlog;
 use log::*;
 
+use std::io::stdin;
+use std::io::prelude::*;
+
 #[derive(Debug, StructOpt)]
 #[structopt(name = "Captain Git Hook", about = "A collection of tools for more opinionated Git usage")]
 pub struct Opt {
@@ -28,6 +31,10 @@ enum Command {
     #[structopt(name = "prepare-commit-msg")]
     PrepareCommitMsg(PrepareCommitMsg),
 
+    /// Git hook called before pushing to a remote repo
+    #[structopt(name = "pre-push")]
+    PrePush(PrePush),
+
     /// Git hook called on the server before updating any references
     #[structopt(name = "pre-receive")]
     PreReceive,
@@ -37,7 +44,7 @@ enum Command {
     InstallHooks,
 }
 
-fn main() -> Result<(), Box<Error>> {
+fn main() -> Result<(), Box<dyn Error>> {
     let opt = Opt::from_args();
     stderrlog::new()
         .module(module_path!())
@@ -57,6 +64,21 @@ fn main() -> Result<(), Box<Error>> {
 
     match opt.command {
         Command::PrepareCommitMsg(x) => prepare_commit_msg(x, config),
+        Command::PrePush(x) => {
+            for raw_line in stdin().lock().lines() {
+                let line = raw_line?;
+                let mut fields = line.split(' ');
+                match (fields.next(), fields.next(), fields.next(), fields.next()) {
+                    (Some(local_ref), Some(local_sha), Some(remote_ref), Some(remote_sha)) => {
+                        pre_push(&x, &config, local_ref, local_sha, remote_ref, remote_sha)?;
+                    },
+                    _ => {
+                        warn!("Expected parameters not received on stdin. Line received was: {}", line);
+                    }
+                };
+            }
+            Ok(())
+        },
         Command::PreReceive => pre_receive(config, "new_value"),
         Command::InstallHooks => install_hooks(),
     }
