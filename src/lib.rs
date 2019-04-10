@@ -1,8 +1,12 @@
+#![deny(nonstandard_style)]
+#![deny(warnings)]
+#![deny(rust_2018_idioms)]
+#![deny(unused)]
+#![deny(future_incompatible)]
+
 use std::error::Error;
 use structopt::StructOpt;
 use std::path::PathBuf;
-
-use log::*;
 
 use crate::policies::*;
 use crate::config::Config;
@@ -28,8 +32,18 @@ pub struct PrepareCommitMsg {
     pub existing_commit: Option<String>,
 }
 
+#[derive(Debug, StructOpt)]
+pub struct PrePush {
+    /// The name of the destination remote
+    #[structopt()]
+    pub remote_name: String,
+    /// The location of the destination remote
+    #[structopt()]
+    pub remote_location: String,
+}
 
-pub fn prepare_commit_msg(opt: PrepareCommitMsg, config: Config) -> Result<(), Box<Error>> {
+
+pub fn prepare_commit_msg(opt: PrepareCommitMsg, config: Config) -> Result<(), Box<dyn Error>> {
     if opt.commit_source.is_none() {
         if let Some(_) = config.prepend_branch_name {
             prepend_branch_name(opt.commit_file)?;
@@ -44,14 +58,18 @@ pub fn prepare_commit_msg(opt: PrepareCommitMsg, config: Config) -> Result<(), B
     }
 }
 
-pub fn pre_receive(config: Config, new_value: &str) -> Result<(), Box<Error>> {
+pub fn pre_push(_opt: &PrePush, _config: &Config, _local_ref: &str, _local_sha: &str, _remote_ref: &str, _remote_sha: &str) -> Result<(), Box<dyn Error>> {
+    Ok(())
+}
+
+pub fn pre_receive(config: Config, new_value: &str) -> Result<(), Box<dyn Error>> {
     if let Some(c) = config.verify_git_commits {
         verify_git_commits(new_value, &c.team_fingerprints_file , &c.keyserver)?;
     }
     Ok(())
 }
 
-pub fn install_hooks() -> Result<(), Box<Error>> {
+pub fn install_hooks() -> Result<(), Box<dyn Error>> {
     let repo = LiveGit::new()?;
     repo.write_git_file("hooks/prepare-commit-msg", r#"#!/bin/sh
 capn prepare-commit-msg "$@"

@@ -8,7 +8,7 @@ use std::io::prelude::*;
 use std::time::Instant;
 use log::*;
 
-pub fn prepend_branch_name(commit_file: PathBuf) -> Result<(), Box<Error>> {
+pub fn prepend_branch_name(commit_file: PathBuf) -> Result<(), Box<dyn Error>> {
     debug!("Executing policy: prepend_branch_name");
     
     let git = LiveGit::new()?;
@@ -34,7 +34,7 @@ fn prepend_string_to_file(s: String, filename: PathBuf) -> Result<(), std::io::E
     write!(write_file, "{}", current_contents)
 }
 
-pub fn verify_git_commits(new_value: &str, team_fingerprints_file: &str, keyserver: &str) -> Result<(), Box<Error>> {
+pub fn verify_git_commits(_new_value: &str, team_fingerprints_file: &str, keyserver: &str) -> Result<(), Box<dyn Error>> {
     debug!("Executing policy: verify_git_commits");
     
     let start = Instant::now();

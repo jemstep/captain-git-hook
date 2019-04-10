@@ -5,14 +5,14 @@ use crate::error::CapnError;
 use log::*;
 
 pub trait Gpg {
-    fn fingerprints(&self) -> Result<Vec<String>, Box<Error>>;
-    fn receive_keys(&self, key_server: &str, fingerprints: &[String]) -> Result<(), Box<Error>>;
+    fn fingerprints(&self) -> Result<Vec<String>, Box<dyn Error>>;
+    fn receive_keys(&self, key_server: &str, fingerprints: &[String]) -> Result<(), Box<dyn Error>>;
 }
 
 pub struct LiveGpg {}
 
 impl Gpg for LiveGpg {
-    fn fingerprints(&self) -> Result<Vec<String>, Box<Error>> {
+    fn fingerprints(&self) -> Result<Vec<String>, Box<dyn Error>> {
         let result = Command::new("gpg")
             .arg("--with-colons")
             .arg("--fingerprint")
@@ -26,7 +26,7 @@ impl Gpg for LiveGpg {
         Ok(per_line)
     }
 
-     fn receive_keys(&self, key_server: &str, fingerprints: &[String]) -> Result<(), Box<Error>> {
+     fn receive_keys(&self, key_server: &str, fingerprints: &[String]) -> Result<(), Box<dyn Error>> {
         trace!("Fingerprints {:?}",fingerprints);
         let result = Command::new("gpg")
             .args(&["--keyserver",key_server])
@@ -48,10 +48,10 @@ mod test {
 
     pub struct MockGpg {}
     impl Gpg for MockGpg {
-        fn fingerprints(&self) -> Result<Vec<String>, Box<Error>> {
+        fn fingerprints(&self) -> Result<Vec<String>, Box<dyn Error>> {
             Ok(vec!(String::from("111111111111111111111111111111111111111111")))
         }
-        fn receive_keys(&self, key_server: &str, fingerprints: &[String]) -> Result<(), Box<Error>> {
+        fn receive_keys(&self, _key_server: &str, _fingerprints: &[String]) -> Result<(), Box<dyn Error>> {
             Ok(())
         }
     }

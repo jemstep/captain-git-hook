@@ -6,12 +6,12 @@ use std::error::Error;
 use crate::config::*;
 
 pub trait Git {
-    fn read_file(&self, path: &str) -> Result<String, Box<Error>>;
-    fn write_git_file(&self, path: &str, contents: &str) -> Result<(), Box<Error>>;
+    fn read_file(&self, path: &str) -> Result<String, Box<dyn Error>>;
+    fn write_git_file(&self, path: &str, contents: &str) -> Result<(), Box<dyn Error>>;
     
-    fn current_branch(&self) -> Result<String, Box<Error>>;
+    fn current_branch(&self) -> Result<String, Box<dyn Error>>;
     
-    fn read_config(&self) -> Result<Config, Box<Error>> {
+    fn read_config(&self) -> Result<Config, Box<dyn Error>> {
         let config_str = self.read_file(".capn")?;
 
         let config = Config::from_toml_string(&config_str)?;
@@ -25,14 +25,14 @@ pub struct LiveGit {
 }
 
 impl LiveGit {
-    pub fn new() -> Result<LiveGit, Box<Error>> {
+    pub fn new() -> Result<LiveGit, Box<dyn Error>> {
         let repo = Repository::discover("./")?;
         Ok(LiveGit { repo })
     }
 }
 
 impl Git for LiveGit {
-    fn read_file(&self, path: &str) -> Result<String, Box<Error>> {
+    fn read_file(&self, path: &str) -> Result<String, Box<dyn Error>> {
         if let Some(working_dir) = self.repo.workdir()  {
             let mut read_file = File::open(working_dir.join(path))?;
             let mut current_contents = String::new();
@@ -51,7 +51,7 @@ impl Git for LiveGit {
         }
     }
 
-    fn write_git_file(&self, path: &str, contents: &str) -> Result<(), Box<Error>> {
+    fn write_git_file(&self, path: &str, contents: &str) -> Result<(), Box<dyn Error>> {
         use std::os::unix::fs::PermissionsExt;
 
         let dotgit_dir = self.repo.path();
@@ -62,7 +62,7 @@ impl Git for LiveGit {
         Ok(())
     }
 
-    fn current_branch(&self) -> Result<String, Box<Error>> {
+    fn current_branch(&self) -> Result<String, Box<dyn Error>> {
         let head = self.repo.head()?;
         let head_name =  head.shorthand();
         match head_name {
@@ -78,13 +78,13 @@ mod test {
     
     pub struct MockGit {}
     impl Git for MockGit {
-        fn read_file(&self, _path: &str) -> Result<String, Box<Error>> {
+        fn read_file(&self, _path: &str) -> Result<String, Box<dyn Error>> {
             Ok(String::from(""))
         }
-        fn current_branch(&self) -> Result<String, Box<Error>> {
+        fn current_branch(&self) -> Result<String, Box<dyn Error>> {
             Ok(String::from("master"))
         }
-        fn write_git_file(&self, _path: &str, _contents: &str) -> Result<(), Box<Error>> {
+        fn write_git_file(&self, _path: &str, _contents: &str) -> Result<(), Box<dyn Error>> {
             Ok(())
         }
     }
