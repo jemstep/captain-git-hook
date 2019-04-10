@@ -51,15 +51,22 @@ impl Git for LiveGit {
         }
     }
 
-    fn write_git_file(&self, path: &str, file_mode: u32, contents: &str) -> Result<(), Box<dyn Error>> {
+    #[cfg(windows)]
+    fn write_git_file(&self, path: &str, _file_mode: u32, contents: &str) -> Result<(), Box<dyn Error>> {
         let dotgit_dir = self.repo.path();
         let mut file = File::create(dotgit_dir.join(path))?;
+        file.write_all(contents.as_bytes())?;
 
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            file.set_permissions(PermissionsExt::from_mode(file_mode))?;
-        }
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    fn write_git_file(&self, path: &str, file_mode: u32, contents: &str) -> Result<(), Box<dyn Error>> {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dotgit_dir = self.repo.path();
+        let mut file = File::create(dotgit_dir.join(path))?;
+        file.set_permissions(PermissionsExt::from_mode(file_mode))?;
 
         file.write_all(contents.as_bytes())?;
 
