@@ -1,8 +1,12 @@
+#![deny(nonstandard_style)]
+#![deny(warnings)]
+#![deny(rust_2018_idioms)]
+#![deny(unused)]
+#![deny(future_incompatible)]
+
 use std::error::Error;
 use structopt::StructOpt;
 use std::path::PathBuf;
-
-use log::*;
 
 use crate::policies::*;
 use crate::config::Config;
@@ -29,7 +33,7 @@ pub struct PrepareCommitMsg {
 }
 
 
-pub fn prepare_commit_msg(opt: PrepareCommitMsg, config: Config) -> Result<(), Box<Error>> {
+pub fn prepare_commit_msg(opt: PrepareCommitMsg, config: Config) -> Result<(), Box<dyn Error>> {
     if opt.commit_source.is_none() {
         if let Some(_) = config.prepend_branch_name {
             prepend_branch_name(opt.commit_file)?;
@@ -51,7 +55,7 @@ pub fn pre_receive(config: Config, new_value: &str) -> Result<(), Box<Error>> {
     Ok(())
 }
 
-pub fn install_hooks() -> Result<(), Box<Error>> {
+pub fn install_hooks() -> Result<(), Box<dyn Error>> {
     let repo = LiveGit::new()?;
     repo.write_git_file("hooks/prepare-commit-msg", r#"#!/bin/sh
 capn prepare-commit-msg "$@"

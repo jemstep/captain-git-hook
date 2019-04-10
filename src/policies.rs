@@ -8,7 +8,7 @@ use std::io::prelude::*;
 use std::time::Instant;
 use log::*;
 
-pub fn prepend_branch_name(commit_file: PathBuf) -> Result<(), Box<Error>> {
+pub fn prepend_branch_name(commit_file: PathBuf) -> Result<(), Box<dyn Error>> {
     debug!("Executing policy: prepend_branch_name");
     
     let git = LiveGit::new()?;
