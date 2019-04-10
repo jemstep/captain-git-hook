@@ -5,6 +5,56 @@ development teams.
 
 [[https://travis-ci.com/jemstep/captain-git-hook][https://travis-ci.com/jemstep/captain-git-hook.svg?branch=master]]
 
+** Build and Install from Source
+
+*** Prerequisites
+
+Captain Git Hook is written in the Rust programming language. You can
+download the Rust toolchain from the [[https://www.rust-lang.org/tools/install][Rust website]].
+
+This project targets the latest stable release of the Rust toolchain.
+
+*** Test
+
+The project can be compiled and the unit tests run using Cargo. As
+you're adding new functionality, it's recommended to also add unit
+tests for that functionality.
+
+#+BEGIN_SRC shell
+  cargo test
+#+END_SRC
+
+*** Build and Run
+
+Captain Git Hook can be built and run directly from Cargo. One
+important thing to know is that the ~--~ on the command line separates
+the arguments being passed to Cargo from the arguments being passed to
+Captain Git Hook.
+
+#+BEGIN_SRC shell
+  cargo run -- <capn_args>
+#+END_SRC
+
+This is useful for limited testing, but many of the commands of the
+CLI expect to be called by Git with certain inputs, so it's
+recommended to rather install binary to your path for local use.
+
+*** Build and Install
+
+Most usages of the project assume that you have the project built and
+installed on your path. This can be done through Cargo, by running the
+install command.
+
+#+BEGIN_SRC shell
+  cargo install --path .
+#+END_SRC
+
+This will add an executable to your path called ~capn~.
+
+#+BEGIN_SRC shell
+  capn --version
+#+END_SRC
+
 ** Usage
 
 *** Git Hooks
@@ -19,6 +69,14 @@ command.
 #+BEGIN_SRC shell
   capn install-hooks
 #+END_SRC
+
+*** Policy Configuration
+
+The policies that Captain Git Hook will apply for a repo are
+controlled by a ~.capn~ configuration file in the root of the
+project's repo. This configuration file is in TOML format.
+
+This is an example ~.capn~ file: [[./.capn]]
 
 ** License
 
