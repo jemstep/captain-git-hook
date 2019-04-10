@@ -7,7 +7,7 @@ use crate::config::*;
 
 pub trait Git {
     fn read_file(&self, path: &str) -> Result<String, Box<dyn Error>>;
-    fn write_git_file(&self, path: &str, contents: &str) -> Result<(), Box<dyn Error>>;
+    fn write_git_file(&self, path: &str, file_mode: u32, contents: &str) -> Result<(), Box<dyn Error>>;
     
     fn current_branch(&self) -> Result<String, Box<dyn Error>>;
     
@@ -51,12 +51,15 @@ impl Git for LiveGit {
         }
     }
 
-    fn write_git_file(&self, path: &str, contents: &str) -> Result<(), Box<dyn Error>> {
-        use std::os::unix::fs::PermissionsExt;
-
+    fn write_git_file(&self, path: &str, file_mode: u32, contents: &str) -> Result<(), Box<dyn Error>> {
         let dotgit_dir = self.repo.path();
         let mut file = File::create(dotgit_dir.join(path))?;
-        file.set_permissions(PermissionsExt::from_mode(0o750))?;
+
+        if cfg!(unix) {
+            use std::os::unix::fs::PermissionsExt;
+            file.set_permissions(PermissionsExt::from_mode(file_mode))?;
+        }
+
         file.write_all(contents.as_bytes())?;
 
         Ok(())
@@ -84,7 +87,7 @@ mod test {
         fn current_branch(&self) -> Result<String, Box<dyn Error>> {
             Ok(String::from("master"))
         }
-        fn write_git_file(&self, _path: &str, _contents: &str) -> Result<(), Box<dyn Error>> {
+        fn write_git_file(&self, _path: &str, _file_mode: u32, _contents: &str) -> Result<(), Box<dyn Error>> {
             Ok(())
         }
     }
