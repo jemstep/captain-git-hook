@@ -55,7 +55,8 @@ impl Git for LiveGit {
         let dotgit_dir = self.repo.path();
         let mut file = File::create(dotgit_dir.join(path))?;
 
-        if cfg!(unix) {
+        #[cfg(unix)]
+        {
             use std::os::unix::fs::PermissionsExt;
             file.set_permissions(PermissionsExt::from_mode(file_mode))?;
         }
