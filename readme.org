@@ -3,6 +3,9 @@
 A configurable installation of Git hooks and tools for use in software
 development teams.
 
+
+[[https://travis-ci.com/jemstep/captain-git-hook.svg?branch=master]]
+
 ** Usage
 
 *** Git Hooks
