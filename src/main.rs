@@ -3,6 +3,8 @@ use std::error::Error;
 use std::process::exit;
 
 use capn::git::{LiveGit, Git};
+use capn::gpg::LiveGpg;
+use capn::fs::LiveFs;
 use capn::*;
 
 use stderrlog;
@@ -63,7 +65,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     debug!("Configuration: {:#?}", config);
 
     match opt.command {
-        Command::PrepareCommitMsg(x) => prepare_commit_msg(x, config),
+        Command::PrepareCommitMsg(x) => prepare_commit_msg::<LiveFs, LiveGit>(x, config),
         Command::PrePush(x) => {
             for raw_line in stdin().lock().lines() {
                 let line = raw_line?;
@@ -79,7 +81,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
             Ok(())
         },
-        Command::PreReceive => pre_receive(config, "new_value"),
-        Command::InstallHooks => install_hooks(),
+        Command::PreReceive => pre_receive::<LiveGit, LiveGpg>(config, "new_value"),
+        Command::InstallHooks => install_hooks::<LiveGit>(),
     }
 }

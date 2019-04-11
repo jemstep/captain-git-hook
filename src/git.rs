@@ -5,7 +5,8 @@ use std::error::Error;
 
 use crate::config::*;
 
-pub trait Git {
+pub trait Git: Sized {
+    fn new() -> Result<Self, Box<dyn Error>>;
     fn read_file(&self, path: &str) -> Result<String, Box<dyn Error>>;
     fn write_git_file(&self, path: &str, file_mode: u32, contents: &str) -> Result<(), Box<dyn Error>>;
     
@@ -17,21 +18,18 @@ pub trait Git {
         let config = Config::from_toml_string(&config_str)?;
         Ok(config)
     }
-
 }
 
 pub struct LiveGit {
     repo: Repository
 }
 
-impl LiveGit {
-    pub fn new() -> Result<LiveGit, Box<dyn Error>> {
+impl Git for LiveGit {
+    fn new() -> Result<Self, Box<dyn Error>> {
         let repo = Repository::discover("./")?;
         Ok(LiveGit { repo })
     }
-}
-
-impl Git for LiveGit {
+    
     fn read_file(&self, path: &str) -> Result<String, Box<dyn Error>> {
         if let Some(working_dir) = self.repo.workdir()  {
             let mut read_file = File::open(working_dir.join(path))?;
@@ -87,8 +85,11 @@ impl Git for LiveGit {
 mod test {
     use super::*;
     
-    pub struct MockGit {}
+    pub struct MockGit;
     impl Git for MockGit {
+        fn new() -> Result<Self, Box<dyn Error>> {
+            Ok(MockGit)
+        }
         fn read_file(&self, _path: &str) -> Result<String, Box<dyn Error>> {
             Ok(String::from(""))
         }
