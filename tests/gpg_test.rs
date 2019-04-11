@@ -1,10 +1,10 @@
 use capn::gpg::*;
 
 #[test]
-fn fingerprints_exist() {
+fn call_for_fingerprints_completes_successfully() {
     let fingerprintids = (LiveGpg{}).fingerprints();
     println!("{:?}", fingerprintids);
-    assert!(fingerprintids.unwrap().len() > 0);
+    assert!(fingerprintids.is_ok());
 }
 
 #[test]

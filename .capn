@@ -1,4 +1,4 @@
-[prepend_branch_name]
+# [prepend_branch_name]
 
 [verify_git_commits]
 author_domain = ""

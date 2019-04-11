@@ -71,7 +71,7 @@ pub fn pre_receive(config: Config, new_value: &str) -> Result<(), Box<dyn Error>
 
 pub fn install_hooks() -> Result<(), Box<dyn Error>> {
     let repo = LiveGit::new()?;
-    repo.write_git_file("hooks/prepare-commit-msg", r#"#!/bin/sh
+    repo.write_git_file("hooks/prepare-commit-msg", 0o750, r#"#!/bin/sh
 capn prepare-commit-msg "$@"
 "#)?;
     
