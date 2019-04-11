@@ -10,14 +10,16 @@ use std::path::PathBuf;
 
 use crate::policies::*;
 use crate::config::Config;
-use crate::git::{LiveGit, Git};
-
+use crate::git::Git;
+use crate::fs::Fs;
+use crate::gpg::Gpg;
 
 pub mod git;
 pub mod gpg;
 pub mod policies;
 pub mod config;
-mod error;
+pub mod error;
+pub mod fs;
 
 #[derive(Debug, StructOpt)]
 pub struct PrepareCommitMsg {
@@ -43,10 +45,10 @@ pub struct PrePush {
 }
 
 
-pub fn prepare_commit_msg(opt: PrepareCommitMsg, config: Config) -> Result<(), Box<dyn Error>> {
+pub fn prepare_commit_msg<F: Fs, G: Git>(opt: PrepareCommitMsg, config: Config) -> Result<(), Box<dyn Error>> {
     if opt.commit_source.is_none() {
         if let Some(_) = config.prepend_branch_name {
-            prepend_branch_name(opt.commit_file)?;
+            prepend_branch_name::<F, G>(opt.commit_file)?;
         }
 
         Ok(())
@@ -62,15 +64,15 @@ pub fn pre_push(_opt: &PrePush, _config: &Config, _local_ref: &str, _local_sha: 
     Ok(())
 }
 
-pub fn pre_receive(config: Config, new_value: &str) -> Result<(), Box<dyn Error>> {
+pub fn pre_receive<G: Git, P: Gpg>(config: Config, new_value: &str) -> Result<(), Box<dyn Error>> {
     if let Some(c) = config.verify_git_commits {
-        verify_git_commits(new_value, &c.team_fingerprints_file , &c.keyserver)?;
+        verify_git_commits::<G, P>(new_value, &c.team_fingerprints_file , &c.keyserver)?;
     }
     Ok(())
 }
 
-pub fn install_hooks() -> Result<(), Box<dyn Error>> {
-    let repo = LiveGit::new()?;
+pub fn install_hooks<G: Git>() -> Result<(), Box<dyn Error>> {
+    let repo = G::new()?;
     repo.write_git_file("hooks/prepare-commit-msg", 0o750, r#"#!/bin/sh
 capn prepare-commit-msg "$@"
 "#)?;
