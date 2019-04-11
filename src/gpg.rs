@@ -17,6 +17,11 @@ impl Gpg for LiveGpg {
             .arg("--with-colons")
             .arg("--fingerprint")
             .output()?;
+        if !result.status.success() {
+            warn!("Call to GPG failed");
+            return Err(Box::new(CapnError::new(format!("Call to GPG failed with staus {}", result.status))));
+        }
+
         let encoded = String::from_utf8(result.stdout)?;
         let per_line = encoded.split('\n')
             .filter(|s| s.starts_with("fpr"))
