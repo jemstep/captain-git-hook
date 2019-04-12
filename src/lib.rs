@@ -20,6 +20,7 @@ pub mod policies;
 pub mod config;
 pub mod error;
 pub mod fs;
+pub mod fingerprints;
 
 #[derive(Debug, StructOpt)]
 pub struct PrepareCommitMsg {
@@ -60,7 +61,10 @@ pub fn prepare_commit_msg<F: Fs, G: Git>(opt: PrepareCommitMsg, config: Config) 
     }
 }
 
-pub fn pre_push(_opt: &PrePush, _config: &Config, _local_ref: &str, _local_sha: &str, _remote_ref: &str, _remote_sha: &str) -> Result<(), Box<dyn Error>> {
+pub fn pre_push<G: Git, P: Gpg>(_opt: &PrePush, config: &Config, local_ref: &str, _local_sha: &str, _remote_ref: &str, _remote_sha: &str) -> Result<(), Box<dyn Error>> {
+    if let Some(c) = &config.verify_git_commits {
+        verify_git_commits::<G, P>(local_ref, &c.team_fingerprints_file , &c.keyserver)?;
+    }
     Ok(())
 }
 
@@ -76,6 +80,8 @@ pub fn install_hooks<G: Git>() -> Result<(), Box<dyn Error>> {
     repo.write_git_file("hooks/prepare-commit-msg", 0o750, r#"#!/bin/sh
 capn prepare-commit-msg "$@"
 "#)?;
-    
+    repo.write_git_file("hooks/pre-push", 0o750, r#"#!/bin/sh
+capn pre-push "$@"
+"#)?;
     Ok(())
 }

@@ -2,11 +2,13 @@ use std::error::Error;
 use std::process::*;
 use crate::error::CapnError;
 
+use rayon::prelude::*;
 use log::*;
 
 pub trait Gpg {
     fn fingerprints() -> Result<Vec<String>, Box<dyn Error>>;
     fn receive_keys(key_server: &str, fingerprints: &[String]) -> Result<(), Box<dyn Error>>;
+    fn par_receive_keys(key_server: &str, fingerprints: &[String]) -> Result<(), Box<dyn Error>>;
 }
 
 pub struct LiveGpg {}
@@ -31,8 +33,8 @@ impl Gpg for LiveGpg {
         Ok(per_line)
     }
 
-     fn receive_keys(key_server: &str, fingerprints: &[String]) -> Result<(), Box<dyn Error>> {
-        trace!("Fingerprints {:?}",fingerprints);
+    fn receive_keys(key_server: &str, fingerprints: &[String]) -> Result<(), Box<dyn Error>> {
+        trace!("Receiving keys for fingerprints {:?}",fingerprints);
         let result = Command::new("gpg")
             .args(&["--keyserver",key_server])
             .arg("--recv-keys")
@@ -44,6 +46,18 @@ impl Gpg for LiveGpg {
             } else {
                 Err(Box::new(CapnError::new(format!("Call to GPG keyserver failed with code {:?}", result.code()))))
             }
+    }
+
+    fn par_receive_keys(key_server: &str, fingerprints: &[String]) -> Result<(), Box<dyn Error>> {
+        trace!("Receiving keys for fingerprints in PARALLEL");
+        let _r : Vec<_> = fingerprints.par_iter().map(|fp| {
+            match Self::receive_keys(&key_server, &[fp.to_string()]){
+                Ok(o) => o,
+                Err(e) => error!("Error receiving key for {} : {}", fp, e)
+            };
+            }
+            ).collect();
+        Ok(())
     }
 }
 
@@ -57,6 +71,9 @@ mod test {
             Ok(vec!(String::from("111111111111111111111111111111111111111111")))
         }
         fn receive_keys(_key_server: &str, _fingerprints: &[String]) -> Result<(), Box<dyn Error>> {
+            Ok(())
+        }
+        fn par_receive_keys(_key_server: &str, _fingerprints: &[String]) -> Result<(), Box<dyn Error>> {
             Ok(())
         }
     }

@@ -72,7 +72,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                 let mut fields = line.split(' ');
                 match (fields.next(), fields.next(), fields.next(), fields.next()) {
                     (Some(local_ref), Some(local_sha), Some(remote_ref), Some(remote_sha)) => {
-                        pre_push(&x, &config, local_ref, local_sha, remote_ref, remote_sha)?;
+                        trace!("Calling prepush with: {} {} {} {}", local_ref, local_sha, remote_ref, remote_sha);
+                        pre_push::<LiveGit, LiveGpg>(&x, &config, local_ref, local_sha, remote_ref, remote_sha)?;
                     },
                     _ => {
                         warn!("Expected parameters not received on stdin. Line received was: {}", line);
