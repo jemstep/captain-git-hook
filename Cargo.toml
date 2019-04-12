@@ -1,6 +1,6 @@
 [package]
 name = "capn"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Justin Worthe <justin@jemstep.com>"]
 edition = "2018"
 
@@ -11,3 +11,4 @@ serde = { version = "1.0.89", features = ["derive"] }
 toml = "0.4.2"
 log = "0.4.6"
 stderrlog = "0.4.1"
+rayon = "1.0.3"
