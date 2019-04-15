@@ -63,14 +63,14 @@ pub fn prepare_commit_msg<F: Fs, G: Git>(opt: PrepareCommitMsg, config: Config) 
 
 pub fn pre_push<G: Git, P: Gpg>(_opt: &PrePush, config: &Config, local_ref: &str, _local_sha: &str, _remote_ref: &str, _remote_sha: &str) -> Result<(), Box<dyn Error>> {
     if let Some(c) = &config.verify_git_commits {
-        verify_git_commits::<G, P>(local_ref, &c.team_fingerprints_file , &c.keyserver)?;
+        verify_git_commits::<G, P>(local_ref, &c.team_fingerprints_file , &c.keyserver, c.recv_keys_par)?;
     }
     Ok(())
 }
 
 pub fn pre_receive<G: Git, P: Gpg>(config: Config, new_value: &str) -> Result<(), Box<dyn Error>> {
     if let Some(c) = config.verify_git_commits {
-        verify_git_commits::<G, P>(new_value, &c.team_fingerprints_file , &c.keyserver)?;
+        verify_git_commits::<G, P>(new_value, &c.team_fingerprints_file , &c.keyserver, c.recv_keys_par)?;
     }
     Ok(())
 }

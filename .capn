@@ -5,6 +5,8 @@ author_domain = ""
 committer_domain = ""
 keyserver = ""
 team_fingerprints_file = ""
+recv_keys_par = true
+
 
 [example_complex_config]
 command = "cargo build"

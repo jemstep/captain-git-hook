@@ -20,7 +20,8 @@ pub struct VerifyGitCommitsConfig {
     pub author_domain: String,
     pub committer_domain: String,
     pub keyserver: String,
-    pub team_fingerprints_file: String
+    pub team_fingerprints_file: String,
+    pub recv_keys_par: bool
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
