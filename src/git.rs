@@ -1,9 +1,10 @@
-use git2::Repository;
+use git2::{Repository, Commit, Oid};
 use std::fs::File;
 use std::io::prelude::*;
 use std::error::Error;
 
 use crate::config::*;
+use log::*;
 
 pub trait Git: Sized {
     fn new() -> Result<Self, Box<dyn Error>>;
@@ -11,6 +12,12 @@ pub trait Git: Sized {
     fn write_git_file(&self, path: &str, file_mode: u32, contents: &str) -> Result<(), Box<dyn Error>>;
     
     fn current_branch(&self) -> Result<String, Box<dyn Error>>;
+
+    fn log(&self) -> Result<(), Box<dyn Error>>;
+
+    fn commit_range(&self,from_id: &str,to_id: &str) -> Result<Vec<String>, Box<dyn Error>>;
+
+    fn find_commit(&self,commit_id: &str) -> Result<Commit<'_>, Box<dyn Error>>;
     
     fn read_config(&self) -> Result<Config, Box<dyn Error>> {
         let config_str = self.read_file(".capn")?;
@@ -18,6 +25,30 @@ pub trait Git: Sized {
         let config = Config::from_toml_string(&config_str)?;
         Ok(config)
     }
+
+    fn print_commit(commit: &Commit<'_>) {
+        println!("commit {}", commit.id());
+
+        if commit.parents().len() > 1 {
+            print!("Merge:");
+            for id in commit.parent_ids() {
+                print!(" {:.8}", id);
+            }
+            println!("");
+        }
+
+        let author = commit.author();
+        println!("Author: {}", author);
+        let committer = commit.committer();
+        println!("Committer: {}", committer);
+        println!("");
+
+        for line in String::from_utf8_lossy(commit.message_bytes()).lines() {
+            println!("    {}", line);
+        }
+        println!("");
+    }
+
 }
 
 pub struct LiveGit {
@@ -79,6 +110,44 @@ impl Git for LiveGit {
             None => Err(Box::new(git2::Error::from_str("No branch name found")))
         }
     }
+
+    fn log(&self) -> Result<(), Box<dyn Error>> {
+        let mut revwalk = self.repo.revwalk()?;
+        revwalk.push_head()?;
+        for id in revwalk {
+            let id = id?;
+            let commit = self.repo.find_commit(id)?;
+            Self::print_commit(&commit);
+        }
+        Ok(())
+    }
+
+    fn find_commit(&self, commit_id: &str) -> Result<Commit<'_>, Box<dyn Error>> {
+        let new_commit = self.repo.find_commit(Oid::from_str(commit_id)?)?;
+        Ok(new_commit)                
+    }
+
+    fn commit_range(&self,from_id: &str,to_id: &str) -> Result<Vec<String>, Box<dyn Error>> {
+        trace!("Get commit range from {} to {}", from_id, to_id);
+        let mut v = Vec::new();
+        v.push(to_id.to_string());
+        let new_commit = self.repo.find_commit(Oid::from_str(to_id)?)?;
+        let mut current_id = to_id.to_string();
+        let mut parent_count = new_commit.parent_count();
+        while current_id != from_id && parent_count > 0 {
+            let current_commit = self.repo.find_commit(Oid::from_str(&current_id)?)?;
+            for parent in current_commit.parents() {
+                current_id = Oid::to_string(&parent.id());
+                let parent_commit = self.repo.find_commit(parent.id())?;
+                parent_count = parent_commit.parent_count();
+                if current_id != from_id{
+                    v.push(current_id.to_string());
+                }
+            }      
+        }
+        Ok(v)         
+    }
+   
 }
 
 #[cfg(test)]
@@ -99,6 +168,21 @@ mod test {
         fn write_git_file(&self, _path: &str, _file_mode: u32, _contents: &str) -> Result<(), Box<dyn Error>> {
             Ok(())
         }
+       
+        fn log(&self) -> Result<(), Box<dyn Error>> {
+            Ok(())
+        }
+
+        fn find_commit(&self,commit_id: &str) -> Result<Commit<'_>, Box<dyn Error>> {
+            //figure out how to create Commit
+        }
+
+        fn commit_range(&self,_from_id: &str,_to_id: &str) -> Result<Vec<String>, Box<dyn Error>> {
+            let mut v = Vec::new();
+            v.push("".to_string());
+            Ok(v)         
+        }
+       
     }
 
     #[test]

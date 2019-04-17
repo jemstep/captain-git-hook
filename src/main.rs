@@ -82,7 +82,23 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
             Ok(())
         },
-        Command::PreReceive => pre_receive::<LiveGit, LiveGpg>(config, "new_value"),
+         Command::PreReceive => {
+            for raw_line in stdin().lock().lines() {
+                let line = raw_line?;
+                let mut fields = line.split(' ');
+                match (fields.next(), fields.next(), fields.next()) {
+                    (Some(old_value), Some(new_value), Some(ref_name)) => {
+                        trace!("Calling prereceive with: {} {} {}", old_value, new_value, ref_name);
+                        pre_receive::<LiveGit, LiveGpg>(&config, old_value, new_value, ref_name)?;
+                    },
+                    _ => {
+                        warn!("Expected parameters not received on stdin. Line received was: {}", line);
+                    }
+                };
+            }
+            Ok(())
+        },
+        //Command::PreReceive => pre_receive::<LiveGit, LiveGpg>(config, "new_value"),
         Command::InstallHooks => install_hooks::<LiveGit>(),
     }
 }
