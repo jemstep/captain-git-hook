@@ -47,6 +47,9 @@ enum Command {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
+
+    println!("Aargh, Matey! Welcome to Capn Githook!");
+
     let opt = Opt::from_args();
     stderrlog::new()
         .module(module_path!())
@@ -98,7 +101,6 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
             Ok(())
         },
-        //Command::PreReceive => pre_receive::<LiveGit, LiveGpg>(config, "new_value"),
         Command::InstallHooks => install_hooks::<LiveGit>(),
     }
 }
