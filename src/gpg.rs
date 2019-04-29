@@ -22,7 +22,6 @@ impl Gpg for LiveGpg {
             .output()?;
 
         if !result.status.success() {
-            warn!("Call to GPG failed");
             return Err(Box::new(CapnError::new(format!("Call to GPG failed with staus {}", result.status))));
         }
 
@@ -36,7 +35,8 @@ impl Gpg for LiveGpg {
     }
 
     fn receive_keys(key_server: &str, fingerprints: &HashSet<String>) -> Result<(), Box<dyn Error>> {
-        trace!("Receiving keys for fingerprints {:?}",fingerprints);
+        debug!("Receiving keys for fingerprints {:?}",fingerprints);
+
         let result = Command::new("gpg")
             .args(&["--keyserver",key_server])
             .arg("--recv-keys")
@@ -51,7 +51,8 @@ impl Gpg for LiveGpg {
     }
 
     fn par_receive_keys(key_server: &str, fingerprints: &HashSet<String>) -> Result<(), Box<dyn Error>> {
-        trace!("Receiving keys for fingerprints in PARALLEL");
+        debug!("Receiving keys for fingerprints in PARALLEL");
+
         let _r : Vec<_> = fingerprints.par_iter().map(|fp| {
             let mut fingerprint_set = HashSet::new();
             fingerprint_set.insert(fp.to_string());

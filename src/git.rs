@@ -33,27 +33,27 @@ pub trait Git: Sized {
     }
 
     fn print_commit(commit: &Commit<'_>) {
-        println!("commit {}", commit.id());
+        debug!("commit {}", commit.id());
 
         if commit.parents().len() > 1 {
-            print!("Merge:");
+            debug!("Merge:");
             for id in commit.parent_ids() {
-                print!(" {:.8}", id);
+                debug!(" {:.8}", id);
             }
-            println!("");
+            debug!("");
         }
 
         let author = commit.author();
-        println!("Author: {}", author);
+        debug!("Author: {}", author);
         let committer = commit.committer();
-        println!("Committer: {}", committer);
-        println!("");
+        debug!("Committer: {}", committer);
+        debug!("");
 
         for line in String::from_utf8_lossy(commit.message_bytes()).lines() {
-            println!("    {}", line);
+            debug!("    {}", line);
         }
 
-        println!("");
+        debug!("");
     }
 
 }
@@ -156,16 +156,17 @@ impl Git for LiveGit {
     }
 
     fn pushed(&self, commit_id: Oid) -> Result<bool, Box<dyn Error>> {
-        trace!("Check if commit {} has already been pushed", commit_id);
+        debug!("Check if commit {} has already been pushed", commit_id);
+
         let repo_path = self.repo.path();
-        trace!("Repo path {:?}", repo_path);
+        debug!("Repo path {:?}", repo_path);
         let result = Command::new("git")
             .current_dir(repo_path)
             .arg("branch")
             .arg("--contains")
             .arg(commit_id.to_string())
             .output()?;
-         trace!("RESULT {:?}", result);
+        debug!("RESULT {:?}", result);
         if !result.status.success() {
             return Err(Box::new(CapnError::new(format!("Call to git branch contains failed for commit {} with status {}", commit_id,result.status))));
         }
@@ -178,17 +179,13 @@ impl Git for LiveGit {
     }
 
     fn commit_range(&self, from_id: Oid, to_id: Oid) -> Result<Vec<Commit<'_>>, Box<dyn Error>> {
-        trace!("Get commit range from {} to {}", from_id, to_id);
+        debug!("Get commit range from {} to {}", from_id, to_id);
+
         let mut v = Vec::new();
-        
         let new_commit = self.repo.find_commit(to_id)?;
-
         let mut current_id = to_id;
-
         let mut pushed = false;
-
         v.push(new_commit);
-
         while current_id != from_id {
             if pushed == true { break; }
             let current_commit = self.repo.find_commit(current_id)?;
@@ -196,7 +193,7 @@ impl Git for LiveGit {
                 current_id = parent.id();
                 let parent_commit = self.repo.find_commit(parent.id())?;
                 pushed = self.pushed(current_id)?;
-                trace!("Commit {} already pushed? {}", current_id, pushed);
+                debug!("Commit {} already pushed? {}", current_id, pushed);
                 if current_id != from_id && pushed == false {
                     v.push(parent_commit);
                 }
@@ -206,16 +203,16 @@ impl Git for LiveGit {
     }
 
     fn verify_commit_signature(&self, commit_id: Oid) -> Result<String, Box<dyn Error>> {
-        trace!("Verify commit {}", commit_id);
+        debug!("Verify commit {}", commit_id);
         let repo_path = self.repo.path();
-        trace!("Repo path {:?}", repo_path);
+        debug!("Repo path {:?}", repo_path);
         let result = Command::new("git")
             .current_dir(repo_path)
             .arg("verify-commit")
             .arg("--raw")
             .arg(commit_id.to_string())
             .output()?;
-         trace!("RESULT {:?}", result);
+        debug!("RESULT {:?}", result);
         if !result.status.success() {
             return Err(Box::new(CapnError::new(format!("Call to git verify failed for commit {} with status {}", commit_id,result.status))));
         }
@@ -226,7 +223,7 @@ impl Git for LiveGit {
             .filter_map(|s| s.split(' ').nth(2).map(String::from))
             .collect::<Vec<_>>();
         let first = fingerprints.first();
-        trace!("Found valid fingerprint from commit signature {:?}", first);
+        debug!("Found valid fingerprint from commit signature {:?}", first);
         match first {
             Some(f) => return Ok(f.to_string()),
             None => return Err(Box::new(CapnError::new(format!("Valid fingerprint for commit {} not found", commit_id))))

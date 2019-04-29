@@ -11,7 +11,7 @@ pub struct Fingerprint {
 
 pub fn read_fingerprints<G: Git>(team_fingerprints_file: &str) -> Result<Vec<Fingerprint>, Box<dyn Error>>
 {
-    trace!("Fetching team fingerprints");
+    debug!("Fetching team fingerprints");
     let git = G::new()?;
     let fingerprints_file = git.read_file(team_fingerprints_file)?;
     let fingerprints: Vec<Fingerprint> = fingerprints_file.split('\n')

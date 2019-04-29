@@ -48,14 +48,14 @@ enum Command {
 
 fn main() -> Result<(), Box<dyn Error>> {
 
-    println!("Aargh, Matey! Welcome to Capn Githook!");
-
     let opt = Opt::from_args();
     stderrlog::new()
         .module(module_path!())
         .quiet(opt.quiet)
         .verbosity(opt.verbose + 2) // Default is info
         .init()?;
+    
+    info!("Aargh, Matey! Welcome to Capn Githook!");
 
     let config = match LiveGit::new()?.read_config() {
         Ok(c) => c,
@@ -75,7 +75,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 let mut fields = line.split(' ');
                 match (fields.next(), fields.next(), fields.next(), fields.next()) {
                     (Some(local_ref), Some(local_sha), Some(remote_ref), Some(remote_sha)) => {
-                        trace!("Calling prepush with: {} {} {} {}", local_ref, local_sha, remote_ref, remote_sha);
+                        info!("Calling prepush with: {} {} {} {}", local_ref, local_sha, remote_ref, remote_sha);
                         pre_push::<LiveGit, LiveGpg>(&x, &config, local_ref, local_sha, remote_ref, remote_sha)?;
                     },
                     _ => {
@@ -91,7 +91,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 let mut fields = line.split(' ');
                 match (fields.next(), fields.next(), fields.next()) {
                     (Some(old_value), Some(new_value), Some(ref_name)) => {
-                        trace!("Calling prereceive with: {} {} {}", old_value, new_value, ref_name);
+                        info!("Calling prereceive with: {} {} {}", old_value, new_value, ref_name);
                         pre_receive::<LiveGit, LiveGpg>(&config, old_value, new_value, ref_name)?;
                     },
                     _ => {
