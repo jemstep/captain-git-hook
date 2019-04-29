@@ -8,6 +8,7 @@ use git2::{Commit, Oid};
 use std::error::Error;
 use std::path::PathBuf;
 use std::time::Instant;
+use std::collections::HashSet;
 use log::*;
 
 pub fn prepend_branch_name<F: Fs, G: Git>(commit_file: PathBuf) -> Result<(), Box<dyn Error>> {
@@ -23,9 +24,11 @@ pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_v
     
     let git = G::new()?;
     let start = Instant::now();
+    let old_commit_id = Oid::from_str(old_value)?;
+    let new_commit_id = Oid::from_str(new_value)?;
 
-    let commits = git.commit_range(Oid::from_str(old_value)?, Oid::from_str(new_value)?)?;
-
+    let new_commit = git.find_commit(new_commit_id)?;
+    let commits = git.commit_range(old_commit_id, new_commit_id)?;
     let commit_fingerprints = G::find_commit_fingerprints(&config.team_fingerprints_file, &commits)?;
 
     if config.recv_keys_par {
@@ -34,10 +37,11 @@ pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_v
         let _result = P::receive_keys(&config.keyserver,&commit_fingerprints)?;
     }
 
-    for commit in commits.iter() {
-        verify_email_address_domain(&config.author_domain, &config.committer_domain, &commit)?;
-        let _fingerprint = git.verify_commit_signature(commit.id())?;
-    }
+    verify_email_addresses(&config.author_domain, &config.committer_domain, &commits)?;
+
+    verify_commit_signatures::<G>(&git, &commits)?;
+
+    verify_different_authors::<G>(&new_commit, &commits)?;
 
     let duration = start.elapsed();
     trace!("verify_git_commits completed in: {} ms", duration.as_millis());
@@ -45,26 +49,54 @@ pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_v
     //return Err(Box::new(CapnError::new(format!("Error on verify git commits for testing"))));
 }
 
-fn verify_email_address_domain(author_domain: &str,committer_domain: &str, commit: &Commit<'_>) -> Result<(), Box<dyn Error>> {
-    trace!("Verify email address domain");
-    match commit.author().email(){
-        Some(s) => if s.contains(author_domain) == false {
-                return Err(Box::new(CapnError::new(format!("Author email address incorrect"))))
-            } else {
-                println!("OK")
-            },
-        None => return Err(Box::new(CapnError::new(format!("Author email address incorrect"))))
+fn verify_commit_signatures<G: Git>(git: &G, commits: &Vec<Commit<'_>>) -> Result<(), Box<dyn Error>> {
+    for commit in commits.iter() {
+        if G::single_commit(commit)? {
+            let _fingerprint = git.verify_commit_signature(commit.id())?;
+        }
     }
+    Ok(())
+}
 
-    match commit.committer().email(){
-        Some(s) => if s.contains(committer_domain) == false {
-                return Err(Box::new(CapnError::new(format!("Committer email address incorrect"))))
-            } else {
-                println!("OK")
-            },
-        None => return Err(Box::new(CapnError::new(format!("Committer email address incorrect"))))
+fn verify_different_authors<G: Git>(new_commit: &Commit<'_>, commits: &Vec<Commit<'_>>) -> Result<(), Box<dyn Error>> {
+    let mut authors = HashSet::new();
+    if G::merge_commit(&new_commit)? {
+        for commit in commits.iter() {
+            match commit.author().name() {
+                Some(n) => authors.insert(n.to_string()),
+                None => return Err(Box::new(CapnError::new(format!("No author name found on commit"))))
+            };
+        }
+        if authors.len() <= 1 {
+            return Err(Box::new(CapnError::new(format!("Only one author present"))))
+        }
     }
-        
+   
+    Ok(())
+}
+
+fn verify_email_addresses(author_domain: &str,committer_domain: &str, commits: &Vec<Commit<'_>>) -> Result<(), Box<dyn Error>> {
+    trace!("Verify email address domain");
+    
+    for commit in commits.iter() {
+        match commit.author().email(){
+            Some(s) => if s.contains(author_domain) == false {
+                    return Err(Box::new(CapnError::new(format!("Author email address incorrect"))))
+                } else {
+                    println!("OK")
+                },
+            None => return Err(Box::new(CapnError::new(format!("Author email address incorrect"))))
+        }
+
+        match commit.committer().email(){
+            Some(s) => if s.contains(committer_domain) == false {
+                    return Err(Box::new(CapnError::new(format!("Committer email address incorrect"))))
+                } else {
+                    println!("OK")
+                },
+            None => return Err(Box::new(CapnError::new(format!("Committer email address incorrect"))))
+        }
+    }
     Ok(())
 }
 
