@@ -4,7 +4,7 @@ use crate::fs::*;
 use crate::fingerprints::*;
 use crate::error::CapnError;
 use crate::config::VerifyGitCommitsConfig;
-use git2::{Commit};
+use git2::{Commit, Oid};
 
 use std::error::Error;
 use std::path::PathBuf;
@@ -20,20 +20,20 @@ pub fn prepend_branch_name<F: Fs, G: Git>(commit_file: PathBuf) -> Result<(), Bo
     Ok(F::prepend_string_to_file(branch, commit_file)?)
 }
 
-pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_value: &str, new_value: &str,_ref_name: &str, team_fingerprints_file: &str) -> Result<(), Box<dyn Error>> {
+pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_value: &str, new_value: &str,_ref_name: &str) -> Result<(), Box<dyn Error>> {
     trace!("Executing policy: verify_git_commits");
     
     let git = G::new()?;
     let start = Instant::now();
 
-    let team_fingerprints = read_fingerprints::<G>(team_fingerprints_file)?;
+    let team_fingerprints = read_fingerprints::<G>(&config.team_fingerprints_file)?;
 
     let ids = git.commit_range(old_value, new_value)?;
 
     let mut commit_fingerprints = HashSet::new();
 
     for id in ids {
-        let commit = git.find_commit(&id)?;
+        let commit = git.find_commit(Oid::from_str(&id)?)?;
         G::print_commit(&commit);
         let author = commit.author();
         let commit_email = match author.email() {
@@ -56,9 +56,9 @@ pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_v
     let ids = git.commit_range(old_value, new_value)?;
 
     for id in ids {
-        let commit = git.find_commit(&id)?;
+        let commit = git.find_commit(Oid::from_str(&id)?)?;
         verify_email_address_domain(&config.author_domain, &config.committer_domain, &commit)?;
-        let _fingerprint = git.verify_commit(&id)?;
+        let _fingerprint = git.verify_commit(Oid::from_str(&id)?)?;
     }
 
     let duration = start.elapsed();

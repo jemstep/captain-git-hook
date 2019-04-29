@@ -14,22 +14,14 @@ pub trait Git: Sized {
     fn new() -> Result<Self, Box<dyn Error>>;
     fn read_file(&self, path: &str) -> Result<String, Box<dyn Error>>;
     fn write_git_file(&self, path: &str, file_mode: u32, contents: &str) -> Result<(), Box<dyn Error>>;
-    
     fn current_branch(&self) -> Result<String, Box<dyn Error>>;
-
     fn log(&self) -> Result<(), Box<dyn Error>>;
-
     fn commit_range(&self,from_id: &str,to_id: &str) -> Result<Vec<String>, Box<dyn Error>>;
-
-    fn find_commit(&self,commit_id: &str) -> Result<Commit<'_>, Box<dyn Error>>;
-
-    fn pushed(&self,commit_id: &str) -> Result<bool, Box<dyn Error>>;
-
+    fn find_commit(&self,commit_id: Oid) -> Result<Commit<'_>, Box<dyn Error>>;
+    fn pushed(&self,commit_id: Oid) -> Result<bool, Box<dyn Error>>;
     fn single_commit(commit: &Commit<'_>) -> Result<bool, Box<dyn Error>>;
-
     fn merge_commit(commit: &Commit<'_>) -> Result<bool, Box<dyn Error>>;
-
-    fn verify_commit(&self,commit_id: &str) -> Result<String, Box<dyn Error>>;
+    fn verify_commit(&self,commit_id: Oid) -> Result<String, Box<dyn Error>>;
     
     fn read_config(&self) -> Result<Config, Box<dyn Error>> {
         let config_str = self.read_file(".capn")?;
@@ -134,12 +126,12 @@ impl Git for LiveGit {
         Ok(())
     }
 
-    fn find_commit(&self, commit_id: &str) -> Result<Commit<'_>, Box<dyn Error>> {
-        let new_commit = self.repo.find_commit(Oid::from_str(commit_id)?)?;
+    fn find_commit(&self, commit_id: Oid) -> Result<Commit<'_>, Box<dyn Error>> {
+        let new_commit = self.repo.find_commit(commit_id)?;
         Ok(new_commit)                
     }
 
-     fn pushed(&self, commit_id: &str) -> Result<bool, Box<dyn Error>> {
+     fn pushed(&self, commit_id: Oid) -> Result<bool, Box<dyn Error>> {
         trace!("Check if commit {} has already been pushed", commit_id);
         let repo_path = self.repo.path();
         trace!("Repo path {:?}", repo_path);
@@ -147,7 +139,7 @@ impl Git for LiveGit {
             .current_dir(repo_path)
             .arg("branch")
             .arg("--contains")
-            .arg(&commit_id)
+            .arg(commit_id.to_string())
             .output()?;
          trace!("RESULT {:?}", result);
         if !result.status.success() {
@@ -185,7 +177,7 @@ impl Git for LiveGit {
                 current_id = Oid::to_string(&parent.id());
                 let parent_commit = self.repo.find_commit(parent.id())?;
                 single_commit = Self::single_commit(&parent_commit)?;
-                pushed = self.pushed(&current_id)?;
+                pushed = self.pushed(Oid::from_str(&current_id)?)?;
                 trace!("Commit {} already pushed? {}", current_id, pushed);
                 if current_id != from_id && pushed == false {
                     v.push(current_id.to_string());
@@ -195,7 +187,7 @@ impl Git for LiveGit {
         Ok(v)         
     }
 
-    fn verify_commit(&self, commit_id: &str) -> Result<String, Box<dyn Error>> {
+    fn verify_commit(&self, commit_id: Oid) -> Result<String, Box<dyn Error>> {
         trace!("Verify commit {}", commit_id);
         let repo_path = self.repo.path();
         trace!("Repo path {:?}", repo_path);
@@ -203,7 +195,7 @@ impl Git for LiveGit {
             .current_dir(repo_path)
             .arg("verify-commit")
             .arg("--raw")
-            .arg(&commit_id)
+            .arg(commit_id.to_string())
             .output()?;
          trace!("RESULT {:?}", result);
         if !result.status.success() {
