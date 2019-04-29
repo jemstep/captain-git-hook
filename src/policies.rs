@@ -29,7 +29,7 @@ pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_v
 
     let new_commit = git.find_commit(new_commit_id)?;
     let commits = git.commit_range(old_commit_id, new_commit_id)?;
-    let commit_fingerprints = G::find_commit_fingerprints(&config.team_fingerprints_file, &commits)?;
+    let commit_fingerprints = git.find_commit_fingerprints(&config.team_fingerprints_file, &commits)?;
 
     if config.recv_keys_par {
         let _result = P::par_receive_keys(&config.keyserver,&commit_fingerprints)?;
@@ -68,16 +68,18 @@ fn verify_different_authors<G: Git>(new_commit: &Commit<'_>, commits: &Vec<Commi
     if G::merge_commit(&new_commit)? {
         debug!("MERGE commit detected");
         for commit in commits.iter() {
+            G::debug_commit(&commit);
             match commit.author().name() {
                 Some(n) => authors.insert(n.to_string()),
                 None => return Err(Box::new(CapnError::new(format!("No author name found on commit"))))
             };
         }
+        debug!("Author set: {:#?}", authors);
         if authors.len() <= 1 {
             return Err(Box::new(CapnError::new(format!("Only one author present"))))
         }
     }
-   
+    
     Ok(())
 }
 

@@ -1,7 +1,7 @@
 use git2::{Repository, Commit, Oid};
 use std::fs::File;
 use std::io::prelude::*;
-use crate::fingerprints;
+use crate::fingerprints::Fingerprint;
 use std::error::Error;
 use std::process::*;
 use crate::error::CapnError;
@@ -20,7 +20,7 @@ pub trait Git: Sized {
     fn log(&self) -> Result<(), Box<dyn Error>>;
     fn commit_range(&self,from_id: Oid,to_id: Oid) -> Result<Vec<Commit<'_>>, Box<dyn Error>>;
     fn find_commit(&self,commit_id: Oid) -> Result<Commit<'_>, Box<dyn Error>>;
-    fn find_commit_fingerprints(team_fingerprint_file: &str, commits: &Vec<Commit<'_>>) -> Result<HashSet<String>, Box<dyn Error>>;
+    fn find_commit_fingerprints(&self, team_fingerprint_file: &str, commits: &Vec<Commit<'_>>) -> Result<HashSet<String>, Box<dyn Error>>;
     fn pushed(&self,commit_id: Oid) -> Result<bool, Box<dyn Error>>;
     fn single_commit(commit: &Commit<'_>) -> Result<bool, Box<dyn Error>>;
     fn merge_commit(commit: &Commit<'_>) -> Result<bool, Box<dyn Error>>;
@@ -32,9 +32,8 @@ pub trait Git: Sized {
         Ok(config)
     }
 
-    fn print_commit(commit: &Commit<'_>) {
+    fn debug_commit(commit: &Commit<'_>) {
         debug!("commit {}", commit.id());
-
         if commit.parents().len() > 1 {
             debug!("Merge:");
             for id in commit.parent_ids() {
@@ -42,17 +41,14 @@ pub trait Git: Sized {
             }
             debug!("");
         }
-
         let author = commit.author();
         debug!("Author: {}", author);
         let committer = commit.committer();
         debug!("Committer: {}", committer);
         debug!("");
-
         for line in String::from_utf8_lossy(commit.message_bytes()).lines() {
             debug!("    {}", line);
         }
-
         debug!("");
     }
 
@@ -124,7 +120,7 @@ impl Git for LiveGit {
         for id in revwalk {
             let id = id?;
             let commit = self.repo.find_commit(id)?;
-            Self::print_commit(&commit);
+            Self::debug_commit(&commit);
         }
         Ok(())
     }
@@ -134,9 +130,9 @@ impl Git for LiveGit {
         Ok(new_commit)                
     }
 
-    fn find_commit_fingerprints(team_fingerprint_file: &str, commits: &Vec<Commit<'_>>) -> Result<HashSet<String>, Box<dyn Error>> {
+    fn find_commit_fingerprints(&self, team_fingerprint_file: &str, commits: &Vec<Commit<'_>>) -> Result<HashSet<String>, Box<dyn Error>> {
 
-        let team_fingerprints = fingerprints::read_fingerprints::<LiveGit>(team_fingerprint_file)?;
+        let team_fingerprints = Fingerprint::read_fingerprints::<LiveGit>(self, team_fingerprint_file)?;
 
         let mut commit_fingerprints = HashSet::new();
 
@@ -183,6 +179,7 @@ impl Git for LiveGit {
 
         let mut v = Vec::new();
         let new_commit = self.repo.find_commit(to_id)?;
+        let merging = Self::merge_commit(&new_commit)?;
         let mut current_id = to_id;
         let mut pushed = false;
         v.push(new_commit);
@@ -194,11 +191,12 @@ impl Git for LiveGit {
                 let parent_commit = self.repo.find_commit(parent.id())?;
                 pushed = self.pushed(current_id)?;
                 debug!("Commit {} already pushed? {}", current_id, pushed);
-                if current_id != from_id && pushed == false {
+                if current_id != from_id && (!pushed || merging)  {
                     v.push(parent_commit);
                 }
             }      
         }
+        debug!("Commits found {:#?}",v);
         Ok(v)         
     }
 
