@@ -1,10 +1,12 @@
 use git2::{Repository, Commit, Oid};
 use std::fs::File;
 use std::io::prelude::*;
+use crate::fingerprints;
 use std::error::Error;
 use std::process::*;
 use crate::error::CapnError;
 use std::str;
+use std::collections::HashSet;
 
 
 use crate::config::*;
@@ -16,12 +18,13 @@ pub trait Git: Sized {
     fn write_git_file(&self, path: &str, file_mode: u32, contents: &str) -> Result<(), Box<dyn Error>>;
     fn current_branch(&self) -> Result<String, Box<dyn Error>>;
     fn log(&self) -> Result<(), Box<dyn Error>>;
-    fn commit_range(&self,from_id: &str,to_id: &str) -> Result<Vec<String>, Box<dyn Error>>;
+    fn commit_range(&self,from_id: Oid,to_id: Oid) -> Result<Vec<Commit<'_>>, Box<dyn Error>>;
     fn find_commit(&self,commit_id: Oid) -> Result<Commit<'_>, Box<dyn Error>>;
+    fn find_commit_fingerprints(team_fingerprint_file: &str, commits: &Vec<Commit<'_>>) -> Result<HashSet<String>, Box<dyn Error>>;
     fn pushed(&self,commit_id: Oid) -> Result<bool, Box<dyn Error>>;
     fn single_commit(commit: &Commit<'_>) -> Result<bool, Box<dyn Error>>;
     fn merge_commit(commit: &Commit<'_>) -> Result<bool, Box<dyn Error>>;
-    fn verify_commit(&self,commit_id: Oid) -> Result<String, Box<dyn Error>>;
+    fn verify_commit_signature(&self,commit_id: Oid) -> Result<String, Box<dyn Error>>;
     
     fn read_config(&self) -> Result<Config, Box<dyn Error>> {
         let config_str = self.read_file(".capn")?;
@@ -131,7 +134,28 @@ impl Git for LiveGit {
         Ok(new_commit)                
     }
 
-     fn pushed(&self, commit_id: Oid) -> Result<bool, Box<dyn Error>> {
+    fn find_commit_fingerprints(team_fingerprint_file: &str, commits: &Vec<Commit<'_>>) -> Result<HashSet<String>, Box<dyn Error>> {
+
+        let team_fingerprints = fingerprints::read_fingerprints::<LiveGit>(team_fingerprint_file)?;
+
+        let mut commit_fingerprints = HashSet::new();
+
+        for commit in commits.iter() {
+            let author = commit.author();
+            let commit_email = match author.email() {
+                Some(e) => e,
+                None => return Err(Box::new(CapnError::new(format!("Email on commit not found"))))
+            };
+            let fingerprint = team_fingerprints.iter().find(|f| f.email == commit_email);
+            match fingerprint{
+                Some(f) => commit_fingerprints.insert(f.id.to_string()),
+                None => return Err(Box::new(CapnError::new(format!("Team fingerprint not found"))))
+            };
+        }
+        Ok(commit_fingerprints)
+    }
+
+    fn pushed(&self, commit_id: Oid) -> Result<bool, Box<dyn Error>> {
         trace!("Check if commit {} has already been pushed", commit_id);
         let repo_path = self.repo.path();
         trace!("Repo path {:?}", repo_path);
@@ -153,41 +177,35 @@ impl Git for LiveGit {
         };                
     }
 
-    fn commit_range(&self,from_id: &str,to_id: &str) -> Result<Vec<String>, Box<dyn Error>> {
+    fn commit_range(&self, from_id: Oid, to_id: Oid) -> Result<Vec<Commit<'_>>, Box<dyn Error>> {
         trace!("Get commit range from {} to {}", from_id, to_id);
         let mut v = Vec::new();
         
-        let new_commit = self.repo.find_commit(Oid::from_str(to_id)?)?;
+        let new_commit = self.repo.find_commit(to_id)?;
 
-        if Self::merge_commit(&new_commit)? { 
-            return Ok(v);
-        };
-
-        let mut current_id = to_id.to_string();
-        let mut single_commit = Self::single_commit(&new_commit)?;
+        let mut current_id = to_id;
 
         let mut pushed = false;
 
-        v.push(to_id.to_string());
+        v.push(new_commit);
 
-        while current_id != from_id && single_commit {
+        while current_id != from_id {
             if pushed == true { break; }
-            let current_commit = self.repo.find_commit(Oid::from_str(&current_id)?)?;
+            let current_commit = self.repo.find_commit(current_id)?;
             for parent in current_commit.parents() {
-                current_id = Oid::to_string(&parent.id());
+                current_id = parent.id();
                 let parent_commit = self.repo.find_commit(parent.id())?;
-                single_commit = Self::single_commit(&parent_commit)?;
-                pushed = self.pushed(Oid::from_str(&current_id)?)?;
+                pushed = self.pushed(current_id)?;
                 trace!("Commit {} already pushed? {}", current_id, pushed);
                 if current_id != from_id && pushed == false {
-                    v.push(current_id.to_string());
+                    v.push(parent_commit);
                 }
             }      
         }
         Ok(v)         
     }
 
-    fn verify_commit(&self, commit_id: Oid) -> Result<String, Box<dyn Error>> {
+    fn verify_commit_signature(&self, commit_id: Oid) -> Result<String, Box<dyn Error>> {
         trace!("Verify commit {}", commit_id);
         let repo_path = self.repo.path();
         trace!("Repo path {:?}", repo_path);

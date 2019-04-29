@@ -1,15 +1,13 @@
 use crate::git::*;
 use crate::gpg::*;
 use crate::fs::*;
-use crate::fingerprints::*;
 use crate::error::CapnError;
 use crate::config::VerifyGitCommitsConfig;
-use git2::{Commit, Oid};
 
+use git2::{Commit, Oid};
 use std::error::Error;
 use std::path::PathBuf;
 use std::time::Instant;
-use std::collections::HashSet;
 use log::*;
 
 pub fn prepend_branch_name<F: Fs, G: Git>(commit_file: PathBuf) -> Result<(), Box<dyn Error>> {
@@ -26,26 +24,9 @@ pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_v
     let git = G::new()?;
     let start = Instant::now();
 
-    let team_fingerprints = read_fingerprints::<G>(&config.team_fingerprints_file)?;
+    let commits = git.commit_range(Oid::from_str(old_value)?, Oid::from_str(new_value)?)?;
 
-    let ids = git.commit_range(old_value, new_value)?;
-
-    let mut commit_fingerprints = HashSet::new();
-
-    for id in ids {
-        let commit = git.find_commit(Oid::from_str(&id)?)?;
-        G::print_commit(&commit);
-        let author = commit.author();
-        let commit_email = match author.email() {
-            Some(e) => e,
-            None => return Err(Box::new(CapnError::new(format!("Email on commit not found"))))
-        };
-        let fingerprint = team_fingerprints.iter().find(|f| f.email == commit_email);
-        match fingerprint{
-            Some(f) => commit_fingerprints.insert(f.id.to_string()),
-            None => return Err(Box::new(CapnError::new(format!("Team fingerprint not found"))))
-        };
-    }
+    let commit_fingerprints = G::find_commit_fingerprints(&config.team_fingerprints_file, &commits)?;
 
     if config.recv_keys_par {
         let _result = P::par_receive_keys(&config.keyserver,&commit_fingerprints)?;
@@ -53,12 +34,9 @@ pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_v
         let _result = P::receive_keys(&config.keyserver,&commit_fingerprints)?;
     }
 
-    let ids = git.commit_range(old_value, new_value)?;
-
-    for id in ids {
-        let commit = git.find_commit(Oid::from_str(&id)?)?;
+    for commit in commits.iter() {
         verify_email_address_domain(&config.author_domain, &config.committer_domain, &commit)?;
-        let _fingerprint = git.verify_commit(Oid::from_str(&id)?)?;
+        let _fingerprint = git.verify_commit_signature(commit.id())?;
     }
 
     let duration = start.elapsed();
