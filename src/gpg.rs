@@ -74,10 +74,10 @@ mod test {
         fn fingerprints() -> Result<Vec<String>, Box<dyn Error>> {
             Ok(vec!(String::from("111111111111111111111111111111111111111111")))
         }
-        fn receive_keys(_key_server: &str, _fingerprints: &[String]) -> Result<(), Box<dyn Error>> {
+        fn receive_keys(_key_server: &str, _fingerprints: &HashSet<String>) -> Result<(), Box<dyn Error>> {
             Ok(())
         }
-        fn par_receive_keys(_key_server: &str, _fingerprints: &[String]) -> Result<(), Box<dyn Error>> {
+        fn par_receive_keys(_key_server: &str, _fingerprints: &HashSet<String>) -> Result<(), Box<dyn Error>> {
             Ok(())
         }
     }

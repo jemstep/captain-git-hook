@@ -4,6 +4,8 @@ use std::io::prelude::*;
 use std::error::Error;
 use std::process::*;
 use crate::error::CapnError;
+use std::str;
+
 
 use crate::config::*;
 use log::*;
@@ -31,7 +33,6 @@ pub trait Git: Sized {
     
     fn read_config(&self) -> Result<Config, Box<dyn Error>> {
         let config_str = self.read_file(".capn")?;
-
         let config = Config::from_toml_string(&config_str)?;
         Ok(config)
     }
@@ -56,7 +57,7 @@ pub trait Git: Sized {
         for line in String::from_utf8_lossy(commit.message_bytes()).lines() {
             println!("    {}", line);
         }
-        
+
         println!("");
     }
 
@@ -233,59 +234,4 @@ impl Git for LiveGit {
         return if parent_count > 1 { Ok(true) } else { Ok(false) };
     }
    
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-    
-    pub struct MockGit;
-    impl Git for MockGit {
-        fn new() -> Result<Self, Box<dyn Error>> {
-            Ok(MockGit)
-        }
-        fn read_file(&self, _path: &str) -> Result<String, Box<dyn Error>> {
-            Ok(String::from(""))
-        }
-        fn current_branch(&self) -> Result<String, Box<dyn Error>> {
-            Ok(String::from("master"))
-        }
-        fn write_git_file(&self, _path: &str, _file_mode: u32, _contents: &str) -> Result<(), Box<dyn Error>> {
-            Ok(())
-        }
-       
-        fn log(&self) -> Result<(), Box<dyn Error>> {
-            Ok(())
-        }
-
-        fn find_commit(&self,commit_id: &str) -> Result<Commit<'_>, Box<dyn Error>> {
-            //figure out how to create Commit
-        }
-
-        fn verify_commit(&self, commit_id: &str) -> Result<String, Box<dyn Error>> {
-             Ok(String::from(""))
-        }
-
-        fn commit_range(&self,_from_id: &str,_to_id: &str) -> Result<Vec<String>, Box<dyn Error>> {
-            let mut v = Vec::new();
-            v.push("".to_string());
-            Ok(v)         
-        }
-       
-    }
-
-    #[test]
-    fn parses_empty_config_to_nones() {
-        use crate::config::*;
-        
-        let config = (MockGit{}).read_config().unwrap();
-        assert_eq!(
-            config,
-            Config {
-                prepend_branch_name: None,
-                verify_git_commits: None,
-                example_complex_config: None
-            }
-        );
-    }
 }
