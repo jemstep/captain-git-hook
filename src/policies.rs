@@ -30,7 +30,7 @@ pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_v
     let new_commit_id = Oid::from_str(new_value)?;
 
     let new_commit = git.find_commit(new_commit_id)?;
-    let commits;
+    let mut commits = Vec::new();
     if is_new_branch(old_value) {
         info!("NEW BRANCH detected");
         commits = git.find_unpushed_commits(new_commit_id)?;
@@ -38,8 +38,10 @@ pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_v
         info!("MERGE detected");
         match new_commit.parents().nth(1) {
             Some(second_parent) => {
+                commits.push(new_commit);
                 let common_ancestor_id = git.find_common_ancestor(old_commit_id, second_parent.id())?;
-                commits = git.find_commits_for_merge(common_ancestor_id, second_parent.id(),new_commit.id())?;
+                let mut commits2 = git.find_commits(common_ancestor_id, second_parent.id())?;
+                commits.append(&mut commits2);
             },
             None => return Err(Box::new(CapnError::new(format!("Second parent not found for merge commit"))))
         };

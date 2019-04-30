@@ -19,7 +19,6 @@ pub trait Git: Sized {
     fn current_branch(&self) -> Result<String, Box<dyn Error>>;
     fn log(&self) -> Result<(), Box<dyn Error>>;
     fn find_commits(&self,from_id: Oid,to_id: Oid) -> Result<Vec<Commit<'_>>, Box<dyn Error>>;
-    fn find_commits_for_merge(&self,from_id: Oid,to_id: Oid, merge_commit_id: Oid) -> Result<Vec<Commit<'_>>, Box<dyn Error>>;
     fn find_unpushed_commits(&self, new_commit_id: Oid) -> Result<Vec<Commit<'_>>, Box<dyn Error>>;
     fn find_commit(&self,commit_id: Oid) -> Result<Commit<'_>, Box<dyn Error>>;
     fn find_commit_fingerprints(&self, team_fingerprint_file: &str, commits: &Vec<Commit<'_>>) -> Result<HashSet<String>, Box<dyn Error>>;
@@ -181,29 +180,6 @@ impl Git for LiveGit {
         debug!("Find commits between {} to {}", from_id, to_id);
 
         let mut v = Vec::new();
-        let new_commit = self.repo.find_commit(to_id)?;
-        let mut current_id = to_id;
-        v.push(new_commit);
-        while current_id != from_id {
-            let current_commit = self.repo.find_commit(current_id)?;
-            for parent in current_commit.parents() {
-                current_id = parent.id();
-                let parent_commit = self.repo.find_commit(parent.id())?;
-                if current_id != from_id  {
-                    v.push(parent_commit);
-                }
-            }      
-        }
-        debug!("Commits found {:#?}",v);
-        Ok(v)         
-    }
-
-    fn find_commits_for_merge(&self, from_id: Oid, to_id: Oid, merge_commit_id: Oid) -> Result<Vec<Commit<'_>>, Box<dyn Error>> {
-        debug!("Find commits between {} to {} for merge {}", from_id, to_id, merge_commit_id);
-
-        let mut v = Vec::new();
-        let merge_commit = self.repo.find_commit(merge_commit_id)?;
-         v.push(merge_commit);
         let new_commit = self.repo.find_commit(to_id)?;
         let mut current_id = to_id;
         v.push(new_commit);
