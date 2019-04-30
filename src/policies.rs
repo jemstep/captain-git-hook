@@ -85,11 +85,9 @@ fn verify_commit_signatures<G: Git>(git: &G, commits: &Vec<Commit<'_>>) -> Resul
 }
 
 fn verify_different_authors<G: Git>(new_commit: &Commit<'_>, commits: &Vec<Commit<'_>>) -> Result<(), Box<dyn Error>> {
-    debug!("Verify different authors");
-
     let mut authors = HashSet::new();
     if G::merge_commit(&new_commit)? {
-        debug!("MERGE commit detected");
+        debug!("Verify different authors");
         for commit in commits.iter() {
             G::debug_commit(&commit);
             match commit.author().name() {
