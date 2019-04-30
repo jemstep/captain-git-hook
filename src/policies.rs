@@ -11,6 +11,8 @@ use std::time::Instant;
 use std::collections::HashSet;
 use log::*;
 
+const DONT_CARE_REF: &str = "0000000000000000000000000000000000000000";
+
 pub fn prepend_branch_name<F: Fs, G: Git>(commit_file: PathBuf) -> Result<(), Box<dyn Error>> {
     debug!("Executing policy: prepend_branch_name");
     
@@ -28,7 +30,24 @@ pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_v
     let new_commit_id = Oid::from_str(new_value)?;
 
     let new_commit = git.find_commit(new_commit_id)?;
-    let commits = git.commit_range(old_commit_id, new_commit_id)?;
+    let commits;
+    if G::merge_commit(&new_commit)? {
+        info!("MERGE detected");
+        match new_commit.parents().nth(1) {
+            Some(second_parent) => {
+                let common_ancestor_id = git.find_common_ancestor(old_commit_id, second_parent.id())?;
+                commits = git.find_commits_for_merge(common_ancestor_id, second_parent.id(),new_commit.id())?;
+            },
+            None => return Err(Box::new(CapnError::new(format!("Second parent not found for merge commit"))))
+        };
+      
+    } else if is_new_branch(old_value) {
+        info!("NEW BRANCH detected");
+        commits = git.find_unpushed_commits(new_commit_id)?;
+    } else {
+        commits = git.find_commits(old_commit_id, new_commit_id)?;
+    }
+   
     let commit_fingerprints = git.find_commit_fingerprints(&config.team_fingerprints_file, &commits)?;
 
     if config.recv_keys_par {
@@ -49,6 +68,10 @@ pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_v
 
     Ok(())
     //return Err(Box::new(CapnError::new(format!("Error on verify git commits for testing"))));
+}
+
+fn is_new_branch(from_id: &str) -> bool {
+    return from_id == DONT_CARE_REF;
 }
 
 fn verify_commit_signatures<G: Git>(git: &G, commits: &Vec<Commit<'_>>) -> Result<(), Box<dyn Error>> {
