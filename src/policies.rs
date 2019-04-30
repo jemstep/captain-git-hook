@@ -31,7 +31,10 @@ pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_v
 
     let new_commit = git.find_commit(new_commit_id)?;
     let commits;
-    if G::merge_commit(&new_commit)? {
+    if is_new_branch(old_value) {
+        info!("NEW BRANCH detected");
+        commits = git.find_unpushed_commits(new_commit_id)?;
+    } else if G::merge_commit(&new_commit)? {
         info!("MERGE detected");
         match new_commit.parents().nth(1) {
             Some(second_parent) => {
@@ -40,10 +43,7 @@ pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_v
             },
             None => return Err(Box::new(CapnError::new(format!("Second parent not found for merge commit"))))
         };
-      
-    } else if is_new_branch(old_value) {
-        info!("NEW BRANCH detected");
-        commits = git.find_unpushed_commits(new_commit_id)?;
+        verify_different_authors::<G>(&commits)?;
     } else {
         commits = git.find_commits(old_commit_id, new_commit_id)?;
     }
@@ -59,8 +59,6 @@ pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_v
     verify_email_addresses(&config.author_domain, &config.committer_domain, &commits)?;
 
     verify_commit_signatures::<G>(&git, &commits)?;
-
-    verify_different_authors::<G>(&new_commit, &commits)?;
 
     let duration = start.elapsed();
 
@@ -84,23 +82,20 @@ fn verify_commit_signatures<G: Git>(git: &G, commits: &Vec<Commit<'_>>) -> Resul
     Ok(())
 }
 
-fn verify_different_authors<G: Git>(new_commit: &Commit<'_>, commits: &Vec<Commit<'_>>) -> Result<(), Box<dyn Error>> {
+fn verify_different_authors<G: Git>(commits: &Vec<Commit<'_>>) -> Result<(), Box<dyn Error>> {
     let mut authors = HashSet::new();
-    if G::merge_commit(&new_commit)? {
-        debug!("Verify different authors");
-        for commit in commits.iter() {
-            G::debug_commit(&commit);
-            match commit.author().name() {
-                Some(n) => authors.insert(n.to_string()),
-                None => return Err(Box::new(CapnError::new(format!("No author name found on commit"))))
-            };
-        }
-        debug!("Author set: {:#?}", authors);
-        if authors.len() <= 1 {
-            return Err(Box::new(CapnError::new(format!("Only one author present"))))
-        }
+    debug!("Verify different authors");
+    for commit in commits.iter() {
+        G::debug_commit(&commit);
+        match commit.author().name() {
+            Some(n) => authors.insert(n.to_string()),
+            None => return Err(Box::new(CapnError::new(format!("No author name found on commit"))))
+        };
     }
-    
+    debug!("Author set: {:#?}", authors);
+    if authors.len() <= 1 {
+        return Err(Box::new(CapnError::new(format!("Only one author present"))))
+    }
     Ok(())
 }
 

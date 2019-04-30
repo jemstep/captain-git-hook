@@ -228,8 +228,10 @@ impl Git for LiveGit {
         let new_commit = self.repo.find_commit(new_commit_id)?;
         let mut current_id = new_commit_id;
         let mut parent_count = new_commit.parent_count();
-        let mut pushed = false;
-        v.push(new_commit);
+        let mut pushed = self.pushed(current_id)?;
+        if !pushed {
+            v.push(new_commit);
+        }
         while !pushed && parent_count > 0 {
             let current_commit = self.repo.find_commit(current_id)?;
             parent_count = current_commit.parent_count();
