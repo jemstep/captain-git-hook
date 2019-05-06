@@ -77,7 +77,7 @@ fn is_new_branch(from_id: &str) -> bool {
 fn verify_commit_signatures<G: Git>(git: &G, commits: &Vec<Commit<'_>>) -> Result<(), Box<dyn Error>> {
     debug!("Verify commit signatures");
     for commit in commits.iter() {
-        if G::single_commit(commit)? {
+        if G::not_merge_commit(commit)? {
             let _fingerprint = git.verify_commit_signature(commit.id())?;
         }
     }

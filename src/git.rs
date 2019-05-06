@@ -24,7 +24,7 @@ pub trait Git: Sized {
     fn find_commit_fingerprints(&self, team_fingerprint_file: &str, commits: &Vec<Commit<'_>>) -> Result<HashSet<String>, Box<dyn Error>>;
     fn find_common_ancestor(&self, commit1_id: Oid, commit2_id: Oid) -> Result<Oid, Box<dyn Error>>;
     fn pushed(&self,commit_id: Oid) -> Result<bool, Box<dyn Error>>;
-    fn single_commit(commit: &Commit<'_>) -> Result<bool, Box<dyn Error>>;
+    fn not_merge_commit(commit: &Commit<'_>) -> Result<bool, Box<dyn Error>>;
     fn merge_commit(commit: &Commit<'_>) -> Result<bool, Box<dyn Error>>;
     fn verify_commit_signature(&self,commit_id: Oid) -> Result<String, Box<dyn Error>>;
     
@@ -119,17 +119,16 @@ impl Git for LiveGit {
     fn log(&self) -> Result<(), Box<dyn Error>> {
         let mut revwalk = self.repo.revwalk()?;
         revwalk.push_head()?;
-        for id in revwalk {
-            let id = id?;
-            let commit = self.repo.find_commit(id)?;
+        for commit_id in revwalk {
+            let commit = self.repo.find_commit(commit_id?)?;
             Self::debug_commit(&commit);
         }
+
         Ok(())
     }
 
     fn find_commit(&self, commit_id: Oid) -> Result<Commit<'_>, Box<dyn Error>> {
-        let new_commit = self.repo.find_commit(commit_id)?;
-        Ok(new_commit)                
+        Ok(self.repo.find_commit(commit_id)?)
     }
 
     fn find_commit_fingerprints(&self, team_fingerprint_file: &str, commits: &Vec<Commit<'_>>) -> Result<HashSet<String>, Box<dyn Error>> {
@@ -144,7 +143,7 @@ impl Git for LiveGit {
                 Some(e) => e,
                 None => return Err(Box::new(CapnError::new(format!("Email on commit not found"))))
             };
-            let fingerprint = team_fingerprints.iter().find(|f| f.email == commit_email);
+            let fingerprint = team_fingerprints.get(commit_email);
             match fingerprint{
                 Some(f) => commit_fingerprints.insert(f.id.to_string()),
                 None => return Err(Box::new(CapnError::new(format!("Team fingerprint not found"))))
@@ -282,7 +281,7 @@ impl Git for LiveGit {
              
     }
 
-    fn single_commit(commit: &Commit<'_>) -> Result<bool, Box<dyn Error>> {
+    fn not_merge_commit(commit: &Commit<'_>) -> Result<bool, Box<dyn Error>> {
         let parent_count = commit.parent_count();
         return if parent_count == 1 { Ok(true) } else { Ok(false) };
     }
