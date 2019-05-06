@@ -15,25 +15,16 @@ impl Fingerprint {
     {
         debug!("Fetching team fingerprints");
         let fingerprints_file = git.read_file(team_fingerprints_file)?;
-        let fingerprints: HashMap<String, Fingerprint> = fingerprints_file.split('\n')
-            .filter_map( |s| {
-                    let mut split_str = s.split(',');
-                    let fingerprint = match split_str.next(){
-                        Some(s) => s.replace(char::is_whitespace, ""),
-                        None => return None
-                    };
-                    let name = match split_str.next(){
-                        Some(s) => s.to_string(),
-                        None => return None
-                    };
-                    let email = match split_str.next(){
-                        Some(s) => s.to_string(),
-                        None => return None
-                    };
-                    return Some((email.to_string(), Fingerprint {id: fingerprint, name: name, email: email}));
-                    }
-                )
-            .collect();
+        let fingerprints: HashMap<String, Fingerprint> = fingerprints_file.split('\n').filter_map( |l| {
+            let line: Vec<&str> = l.split(',').collect();
+            match &line[..] {
+                [fingerprint, name, email] => {
+                    let fingerprint = fingerprint.replace(char::is_whitespace, "");
+                    return Some((email.to_string(), Fingerprint {id: fingerprint, name: name.to_string(), email: email.to_string()}));
+                },
+                _ => return None
+            }            
+        }).collect();
         return Ok(fingerprints);
     }
 }
