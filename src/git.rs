@@ -178,50 +178,28 @@ impl Git for LiveGit {
     fn find_commits(&self, from_id: Oid, to_id: Oid) -> Result<Vec<Commit<'_>>, Box<dyn Error>> {
         debug!("Find commits between {} to {}", from_id, to_id);
 
-        let mut v = Vec::new();
-        let new_commit = self.repo.find_commit(to_id)?;
-        let mut current_id = to_id;
-        v.push(new_commit);
-        while current_id != from_id {
-            let current_commit = self.repo.find_commit(current_id)?;
-            for parent in current_commit.parents() {
-                current_id = parent.id();
-                let parent_commit = self.repo.find_commit(parent.id())?;
-                if current_id != from_id  {
-                    v.push(parent_commit);
-                }
-            }      
-        }
-        debug!("Commits found {:#?}",v);
-        Ok(v)         
+        let commits : Vec<_> = CommitIterator::new(&self.repo, Some(to_id))
+        .take_while(|c| c.id() != from_id)
+        .collect();
+
+        debug!("Commits found {:#?}",commits);
+        Ok(commits)
     }
 
     fn find_unpushed_commits(&self, new_commit_id: Oid) -> Result<Vec<Commit<'_>>, Box<dyn Error>> {
         debug!("Get unpushed commits from {} ", new_commit_id);
 
-        let mut v = Vec::new();
-        let new_commit = self.repo.find_commit(new_commit_id)?;
-        let mut current_id = new_commit_id;
-        let mut parent_count = new_commit.parent_count();
-        let mut pushed = self.pushed(current_id)?;
-        if !pushed {
-            v.push(new_commit);
-        }
-        while !pushed && parent_count > 0 {
-            let current_commit = self.repo.find_commit(current_id)?;
-            parent_count = current_commit.parent_count();
-            for parent in current_commit.parents() {
-                current_id = parent.id();
-                let parent_commit = self.repo.find_commit(parent.id())?;
-                pushed = self.pushed(current_id)?;
-                debug!("Commit {} already pushed? {}", current_id, pushed);
-                if !pushed  {
-                    v.push(parent_commit);
-                }
-            }      
-        }
-        debug!("Unpushed Commits found {:#?}",v);
-        Ok(v)         
+        let commits : Vec<_> = CommitIterator::new(&self.repo, Some(new_commit_id))
+        .take_while(|c| {
+            match self.pushed(c.id()) {
+                Ok(p) => !p,
+                Err(_) => true
+            }
+        })
+        .collect();
+
+        debug!("Unpushed Commits found {:#?}",commits);
+        Ok(commits)
     }
 
     fn verify_commit_signature(&self, commit_id: Oid) -> Result<String, Box<dyn Error>> {
@@ -287,8 +265,47 @@ impl Git for LiveGit {
     }
 
     fn merge_commit(commit: &Commit<'_>) -> Result<bool, Box<dyn Error>> {
-         let parent_count = commit.parent_count();
+        let parent_count = commit.parent_count();
         return if parent_count > 1 { Ok(true) } else { Ok(false) };
     }
    
+}
+
+struct CommitIterator<'a> {
+    repo: &'a Repository,
+    current_commit_id: Option<Oid>
+}
+
+impl CommitIterator<'_>  {
+    fn new(repo: &Repository,initial_commit_id: Option<Oid> ) -> CommitIterator<'_>  {
+        CommitIterator { repo : repo, current_commit_id : initial_commit_id }
+    }
+}
+
+impl<'a> Iterator for CommitIterator<'a>  {
+    type Item = Commit<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let commit = self.current_commit_id.map(|id| {
+            let current_commit = self.repo.find_commit(id);
+            match current_commit {
+                Ok(c) => {
+                    let parent_count = c.parent_count();
+                    if parent_count == 0 || parent_count > 1 {
+                        self.current_commit_id = None;
+                    } else {
+                        let mut parents = c.parents();
+                        let parent = parents.nth(0);
+                        self.current_commit_id = match parent {
+                            Some(p) => Some(p.id()),
+                            _ => None
+                        };
+                    }
+                    return Some(c);
+                },
+                Err(_) => return None
+            }
+        });
+        return commit.and_then(|c| c);
+    }
 }

@@ -67,7 +67,7 @@ pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_v
     info!("verify_git_commits completed in: {} ms", duration.as_millis());
 
     Ok(())
-    //return Err(Box::new(CapnError::new(format!("Error on verify git commits for testing"))));
+    // return Err(Box::new(CapnError::new(format!("Error on verify git commits for testing"))));
 }
 
 fn is_new_branch(from_id: &str) -> bool {
