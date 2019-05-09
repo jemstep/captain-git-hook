@@ -294,8 +294,7 @@ impl<'a> Iterator for CommitIterator<'a>  {
                     if parent_count == 0 || parent_count > 1 {
                         self.current_commit_id = None;
                     } else {
-                        let mut parents = c.parents();
-                        let parent = parents.nth(0);
+                        let parent = c.parents().nth(0);
                         self.current_commit_id = match parent {
                             Some(p) => Some(p.id()),
                             _ => None
