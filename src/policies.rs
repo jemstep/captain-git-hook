@@ -28,27 +28,9 @@ pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_v
     let start = Instant::now();
     let old_commit_id = Oid::from_str(old_value)?;
     let new_commit_id = Oid::from_str(new_value)?;
-
     let new_commit = git.find_commit(new_commit_id)?;
-    let mut commits = Vec::new();
-    if is_new_branch(old_value) {
-        info!("NEW BRANCH detected");
-        commits = git.find_unpushed_commits(new_commit_id)?;
-    } else if G::merge_commit(&new_commit) {
-        info!("MERGE detected");
-        match new_commit.parents().nth(1) {
-            Some(second_parent) => {
-                commits.push(new_commit);
-                let common_ancestor_id = git.find_common_ancestor(old_commit_id, second_parent.id())?;
-                let mut commits2 = git.find_commits(common_ancestor_id, second_parent.id())?;
-                commits.append(&mut commits2);
-            },
-            None => return Err(Box::new(CapnError::new(format!("Second parent not found for merge commit"))))
-        };
-        verify_different_authors::<G>(&commits)?;
-    } else {
-        commits = git.find_commits(old_commit_id, new_commit_id)?;
-    }
+   
+    let commits = commits_to_verify(&git, old_commit_id, new_commit)?;
    
     let commit_fingerprints = git.find_commit_fingerprints(&config.team_fingerprints_file, &commits)?;
 
@@ -70,8 +52,31 @@ pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_v
     // return Err(Box::new(CapnError::new(format!("Error on verify git commits for testing"))));
 }
 
-fn is_new_branch(from_id: &str) -> bool {
-    return from_id == DONT_CARE_REF;
+fn commits_to_verify<'a, G: Git>(git: &'a G, old_commit_id: Oid, new_commit: Commit<'a>) -> Result<Vec<Commit<'a>>, Box<dyn Error>>  {
+    let mut commits = Vec::new();
+    if is_new_branch(old_commit_id) {
+        info!("NEW BRANCH detected");
+        commits = git.find_unpushed_commits(new_commit.id())?;
+    } else if G::merge_commit(&new_commit) {
+        info!("MERGE detected");
+        match new_commit.parents().nth(1) {
+            Some(second_parent) => {
+                commits.push(new_commit);
+                let common_ancestor_id = git.find_common_ancestor(old_commit_id, second_parent.id())?;
+                let mut commits2 = git.find_commits(common_ancestor_id, second_parent.id())?;
+                commits.append(&mut commits2);
+            },
+            None => return Err(Box::new(CapnError::new(format!("Second parent not found for merge commit"))))
+        };
+        verify_different_authors::<G>(&commits)?;
+    } else {
+        commits = git.find_commits(old_commit_id, new_commit.id())?;
+    }
+    Ok(commits)
+}
+
+fn is_new_branch(from_id: Oid) -> bool {
+    return from_id == Oid::from_str(DONT_CARE_REF).unwrap();
 }
 
 fn verify_commit_signatures<G: Git>(git: &G, commits: &Vec<Commit<'_>>) -> Result<(), Box<dyn Error>> {
