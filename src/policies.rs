@@ -34,7 +34,7 @@ pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_v
     if is_new_branch(old_value) {
         info!("NEW BRANCH detected");
         commits = git.find_unpushed_commits(new_commit_id)?;
-    } else if G::merge_commit(&new_commit)? {
+    } else if G::merge_commit(&new_commit) {
         info!("MERGE detected");
         match new_commit.parents().nth(1) {
             Some(second_parent) => {
@@ -77,7 +77,7 @@ fn is_new_branch(from_id: &str) -> bool {
 fn verify_commit_signatures<G: Git>(git: &G, commits: &Vec<Commit<'_>>) -> Result<(), Box<dyn Error>> {
     debug!("Verify commit signatures");
     for commit in commits.iter() {
-        if G::not_merge_commit(commit)? {
+        if G::not_merge_commit(commit) {
             let _fingerprint = git.verify_commit_signature(commit.id())?;
         }
     }

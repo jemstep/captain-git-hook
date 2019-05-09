@@ -24,8 +24,8 @@ pub trait Git: Sized {
     fn find_commit_fingerprints(&self, team_fingerprint_file: &str, commits: &Vec<Commit<'_>>) -> Result<HashSet<String>, Box<dyn Error>>;
     fn find_common_ancestor(&self, commit1_id: Oid, commit2_id: Oid) -> Result<Oid, Box<dyn Error>>;
     fn pushed(&self,commit_id: Oid) -> Result<bool, Box<dyn Error>>;
-    fn not_merge_commit(commit: &Commit<'_>) -> Result<bool, Box<dyn Error>>;
-    fn merge_commit(commit: &Commit<'_>) -> Result<bool, Box<dyn Error>>;
+    fn not_merge_commit(commit: &Commit<'_>) -> bool;
+    fn merge_commit(commit: &Commit<'_>) -> bool;
     fn verify_commit_signature(&self,commit_id: Oid) -> Result<String, Box<dyn Error>>;
     
     fn read_config(&self) -> Result<Config, Box<dyn Error>> {
@@ -259,14 +259,14 @@ impl Git for LiveGit {
              
     }
 
-    fn not_merge_commit(commit: &Commit<'_>) -> Result<bool, Box<dyn Error>> {
+    fn not_merge_commit(commit: &Commit<'_>) -> bool {
         let parent_count = commit.parent_count();
-        return if parent_count == 1 { Ok(true) } else { Ok(false) };
+        return if parent_count == 1 { true } else { false };
     }
 
-    fn merge_commit(commit: &Commit<'_>) -> Result<bool, Box<dyn Error>> {
+    fn merge_commit(commit: &Commit<'_>) -> bool {
         let parent_count = commit.parent_count();
-        return if parent_count > 1 { Ok(true) } else { Ok(false) };
+        return if parent_count > 1 { true } else { false };
     }
    
 }
