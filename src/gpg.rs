@@ -8,6 +8,7 @@ use log::*;
 
 pub trait Gpg {
     fn fingerprints() -> Result<Vec<String>, Box<dyn Error>>;
+    fn receive_key(key_server: &str, fingerprint: &str) -> Result<(), Box<dyn Error>>;
     fn receive_keys(key_server: &str, fingerprints: &HashSet<String>) -> Result<(), Box<dyn Error>>;
     fn par_receive_keys(key_server: &str, fingerprints: &HashSet<String>) -> Result<(), Box<dyn Error>>;
 }
@@ -34,6 +35,23 @@ impl Gpg for LiveGpg {
         Ok(per_line)
     }
 
+    fn receive_key(key_server: &str, fingerprint: &str) -> Result<(), Box<dyn Error>> {
+        debug!("Receiving keys for fingerprint {:?}",fingerprint);
+
+        let result = Command::new("gpg")
+            .args(&["--keyserver",key_server])
+            .arg("--recv-keys")
+            .arg(fingerprint)
+            .status()?;
+
+            if result.success() {
+                Ok(())
+            } else {
+                Err(Box::new(CapnError::new(format!("Call to GPG keyserver failed with code {:?}", result.code()))))
+            }
+    }
+
+
     fn receive_keys(key_server: &str, fingerprints: &HashSet<String>) -> Result<(), Box<dyn Error>> {
         debug!("Receiving keys for fingerprints {:?}",fingerprints);
 
@@ -54,9 +72,7 @@ impl Gpg for LiveGpg {
         debug!("Receiving keys for fingerprints in PARALLEL");
 
         let _r : Vec<_> = fingerprints.par_iter().map(|fp| {
-            let mut fingerprint_set = HashSet::new();
-            fingerprint_set.insert(fp.to_string());
-            match Self::receive_keys(&key_server, &fingerprint_set){
+            match Self::receive_key(&key_server, fp){
                 Ok(o) => o,
                 Err(e) => error!("Error receiving key for {} : {}", fp, e)
             };
@@ -74,6 +90,9 @@ mod test {
     impl Gpg for MockGpg {
         fn fingerprints() -> Result<Vec<String>, Box<dyn Error>> {
             Ok(vec!(String::from("111111111111111111111111111111111111111111")))
+        }
+        fn receive_key(_key_server: &str, _fingerprint: &str) -> Result<(), Box<dyn Error>> {
+            Ok(())
         }
         fn receive_keys(_key_server: &str, _fingerprints: &HashSet<String>) -> Result<(), Box<dyn Error>> {
             Ok(())
