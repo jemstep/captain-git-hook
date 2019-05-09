@@ -90,18 +90,16 @@ fn verify_commit_signatures<G: Git>(git: &G, commits: &Vec<Commit<'_>>) -> Resul
 }
 
 fn verify_different_authors<G: Git>(commits: &Vec<Commit<'_>>) -> Result<(), Box<dyn Error>> {
-    let mut authors = HashSet::new();
-    debug!("Verify different authors");
-    for commit in commits.iter() {
-        G::debug_commit(&commit);
-        match commit.author().name() {
-            Some(n) => authors.insert(n.to_string()),
-            None => return Err(Box::new(CapnError::new(format!("No author name found on commit"))))
-        };
-    }
+    let authors : HashSet<_> = commits.iter().filter_map(|c| {
+        G::debug_commit(&c);
+        match c.author().name() {
+            Some(n) => Some(n.to_string()),
+            _ => None
+        }
+    }).collect();
     debug!("Author set: {:#?}", authors);
     if authors.len() <= 1 {
-        return Err(Box::new(CapnError::new(format!("Only one author present"))))
+        return Err(Box::new(CapnError::new(format!("None or only one author present"))))
     }
     Ok(())
 }
