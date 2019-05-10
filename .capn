@@ -6,6 +6,9 @@ committer_domain = ""
 keyserver = ""
 team_fingerprints_file = ""
 recv_keys_par = true
+verify_email_addresses = true
+verify_commit_signatures = true
+verify_different_authors = true
 
 
 [example_complex_config]

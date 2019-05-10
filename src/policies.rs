@@ -30,6 +30,8 @@ pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_v
     let new_commit_id = Oid::from_str(new_value)?;
     let new_commit = git.find_commit(new_commit_id)?;
    
+    let merging = G::merge_commit(&new_commit);
+
     let commits = commits_to_verify(&git, old_commit_id, new_commit)?;
    
     let commit_fingerprints = git.find_commit_fingerprints(&config.team_fingerprints_file, &commits)?;
@@ -40,9 +42,17 @@ pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_v
         let _result = P::receive_keys(&config.keyserver,&commit_fingerprints)?;
     }
 
-    verify_email_addresses(&config.author_domain, &config.committer_domain, &commits)?;
+    if config.verify_email_addresses {
+        verify_email_addresses(&config.author_domain, &config.committer_domain, &commits)?;
+    }
 
-    verify_commit_signatures::<G>(&git, &commits)?;
+    if config.verify_commit_signatures {
+        verify_commit_signatures::<G>(&git, &commits)?;
+    }
+
+    if merging && config.verify_different_authors {
+       verify_different_authors::<G>(&commits)?;
+    }
 
     let duration = start.elapsed();
 
@@ -68,7 +78,6 @@ fn commits_to_verify<'a, G: Git>(git: &'a G, old_commit_id: Oid, new_commit: Com
             },
             None => return Err(Box::new(CapnError::new(format!("Second parent not found for merge commit"))))
         };
-        verify_different_authors::<G>(&commits)?;
     } else {
         commits = git.find_commits(old_commit_id, new_commit.id())?;
     }

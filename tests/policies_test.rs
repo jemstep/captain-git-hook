@@ -11,7 +11,10 @@ fn verify_git_commits() {
         committer_domain : "jemstep.com".to_string(),
         keyserver : "KEYSERVER".to_string(),
         team_fingerprints_file: "gpg/TEAM_FINGERPRINTS".to_string(),
-        recv_keys_par : true
+        recv_keys_par : true,
+        verify_email_addresses: true,
+        verify_commit_signatures: true,
+        verify_different_authors: true
     };
 
     let result = policies::verify_git_commits::<LiveGit, LiveGpg>(&config, "old_value","new_value","ref_name");
