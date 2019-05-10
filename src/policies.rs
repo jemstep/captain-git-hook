@@ -28,30 +28,34 @@ pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_v
     let start = Instant::now();
     let old_commit_id = Oid::from_str(old_value)?;
     let new_commit_id = Oid::from_str(new_value)?;
-    let new_commit = git.find_commit(new_commit_id)?;
-   
-    let merging = G::merge_commit(&new_commit);
 
-    let commits = commits_to_verify(&git, old_commit_id, new_commit)?;
-   
-    let commit_fingerprints = git.find_commit_fingerprints(&config.team_fingerprints_file, &commits)?;
+    if !is_deleted_branch(new_commit_id) {
 
-    if config.recv_keys_par {
-        let _result = P::par_receive_keys(&config.keyserver,&commit_fingerprints)?;
+        let new_commit = git.find_commit(new_commit_id)?;
+        let merging = G::merge_commit(&new_commit);
+        let commits = commits_to_verify(&git, old_commit_id, new_commit)?;
+        let commit_fingerprints = git.find_commit_fingerprints(&config.team_fingerprints_file, &commits)?;
+
+        if config.recv_keys_par {
+            let _result = P::par_receive_keys(&config.keyserver,&commit_fingerprints)?;
+        } else {
+            let _result = P::receive_keys(&config.keyserver,&commit_fingerprints)?;
+        }
+
+        if config.verify_email_addresses {
+            verify_email_addresses(&config.author_domain, &config.committer_domain, &commits)?;
+        }
+
+        if config.verify_commit_signatures {
+            verify_commit_signatures::<G>(&git, &commits)?;
+        }
+
+        if merging && config.verify_different_authors {
+        verify_different_authors::<G>(&commits)?;
+        }
+
     } else {
-        let _result = P::receive_keys(&config.keyserver,&commit_fingerprints)?;
-    }
-
-    if config.verify_email_addresses {
-        verify_email_addresses(&config.author_domain, &config.committer_domain, &commits)?;
-    }
-
-    if config.verify_commit_signatures {
-        verify_commit_signatures::<G>(&git, &commits)?;
-    }
-
-    if merging && config.verify_different_authors {
-       verify_different_authors::<G>(&commits)?;
+        info!("DELETE BRANCH detected, not verifying.")
     }
 
     let duration = start.elapsed();
@@ -86,6 +90,10 @@ fn commits_to_verify<'a, G: Git>(git: &'a G, old_commit_id: Oid, new_commit: Com
 
 fn is_new_branch(from_id: Oid) -> bool {
     return from_id == Oid::from_str(DONT_CARE_REF).unwrap();
+}
+
+fn is_deleted_branch(to_id: Oid) -> bool {
+    return to_id == Oid::from_str(DONT_CARE_REF).unwrap();
 }
 
 fn verify_commit_signatures<G: Git>(git: &G, commits: &Vec<Commit<'_>>) -> Result<(), Box<dyn Error>> {
