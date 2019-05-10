@@ -1,4 +1,5 @@
 use capn::gpg::*;
+use std::collections::HashSet;
 
 #[test]
 fn call_for_fingerprints_completes_successfully() {
@@ -8,12 +9,11 @@ fn call_for_fingerprints_completes_successfully() {
 }
 
 #[test]
-#[ignore("This test takes a long time to run")]
+#[ignore = "This test takes a long time to run"]
 fn receive_keys() {
-    let fingerprints = ["111111111111111111111111111111111111111111".to_string(), "111111111111111111111111111111111111111111".to_string()];
+    let mut fingerprints = HashSet::new();
+    fingerprints.insert("1212121212121212112".to_string());
     let result = LiveGpg::receive_keys("keyserver",&fingerprints);
-    //let exitStatus = result.map;
-
     println!("Status {:?}", result);
     assert!(result.is_ok());
 }
