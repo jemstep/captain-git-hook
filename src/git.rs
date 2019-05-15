@@ -12,6 +12,8 @@ use std::collections::HashSet;
 use crate::config::*;
 use log::*;
 
+const DONT_CARE_REF: &str = "0000000000000000000000000000000000000000";
+
 pub trait Git: Sized {
     fn new() -> Result<Self, Box<dyn Error>>;
     fn read_file(&self, path: &str) -> Result<String, Box<dyn Error>>;
@@ -25,7 +27,7 @@ pub trait Git: Sized {
     fn find_common_ancestor(&self, commit1_id: Oid, commit2_id: Oid) -> Result<Oid, Box<dyn Error>>;
     fn pushed(&self,commit_id: Oid) -> Result<bool, Box<dyn Error>>;
     fn not_merge_commit(commit: &Commit<'_>) -> bool;
-    fn merge_commit(commit: &Commit<'_>) -> bool;
+    fn merge_commit(from_id: Oid, new_commit: &Commit<'_>) -> bool;
     fn verify_commit_signature(&self,commit_id: Oid) -> Result<String, Box<dyn Error>>;
     
     fn read_config(&self) -> Result<Config, Box<dyn Error>> {
@@ -53,6 +55,19 @@ pub trait Git: Sized {
         }
         debug!("");
     }
+
+    fn is_new_branch(from_id: Oid) -> bool {
+        return from_id == Self::dont_care_ref();
+    }
+
+    fn is_deleted_branch(to_id: Oid) -> bool {
+        return to_id == Self::dont_care_ref();
+    }
+
+    fn dont_care_ref() -> Oid {
+        return Oid::from_str(DONT_CARE_REF).unwrap();
+    }
+
 
 }
 
@@ -264,9 +279,9 @@ impl Git for LiveGit {
         return if parent_count == 1 { true } else { false };
     }
 
-    fn merge_commit(commit: &Commit<'_>) -> bool {
-        let parent_count = commit.parent_count();
-        return if parent_count > 1 { true } else { false };
+    fn merge_commit(from_id: Oid, new_commit: &Commit<'_>) -> bool {
+        let parent_count = new_commit.parent_count();
+        return if parent_count > 1 && from_id != Self::dont_care_ref() { true } else { false };
     }
    
 }

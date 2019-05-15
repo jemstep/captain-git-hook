@@ -11,7 +11,7 @@ use std::time::Instant;
 use std::collections::HashSet;
 use log::*;
 
-const DONT_CARE_REF: &str = "0000000000000000000000000000000000000000";
+
 
 pub fn prepend_branch_name<F: Fs, G: Git>(commit_file: PathBuf) -> Result<(), Box<dyn Error>> {
     debug!("Executing policy: prepend_branch_name");
@@ -29,10 +29,10 @@ pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_v
     let old_commit_id = Oid::from_str(old_value)?;
     let new_commit_id = Oid::from_str(new_value)?;
 
-    if !is_deleted_branch(new_commit_id) {
+    if !G::is_deleted_branch(new_commit_id) {
 
         let new_commit = git.find_commit(new_commit_id)?;
-        let merging = G::merge_commit(&new_commit);
+        let merging = G::merge_commit(old_commit_id, &new_commit);
         let commits = commits_to_verify(&git, old_commit_id, new_commit)?;
         let commit_fingerprints = git.find_commit_fingerprints(&config.team_fingerprints_file, &commits)?;
 
@@ -51,7 +51,7 @@ pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_v
         }
 
         if merging && config.verify_different_authors {
-        verify_different_authors::<G>(&commits)?;
+            verify_different_authors::<G>(&commits)?;
         }
 
     } else {
@@ -68,10 +68,10 @@ pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_v
 
 fn commits_to_verify<'a, G: Git>(git: &'a G, old_commit_id: Oid, new_commit: Commit<'a>) -> Result<Vec<Commit<'a>>, Box<dyn Error>>  {
     let mut commits = Vec::new();
-    if is_new_branch(old_commit_id) {
+    if G::is_new_branch(old_commit_id) {
         info!("NEW BRANCH detected");
         commits = git.find_unpushed_commits(new_commit.id())?;
-    } else if G::merge_commit(&new_commit) {
+    } else if G::merge_commit(old_commit_id, &new_commit) {
         info!("MERGE detected");
         match new_commit.parents().nth(1) {
             Some(second_parent) => {
@@ -88,13 +88,6 @@ fn commits_to_verify<'a, G: Git>(git: &'a G, old_commit_id: Oid, new_commit: Com
     Ok(commits)
 }
 
-fn is_new_branch(from_id: Oid) -> bool {
-    return from_id == Oid::from_str(DONT_CARE_REF).unwrap();
-}
-
-fn is_deleted_branch(to_id: Oid) -> bool {
-    return to_id == Oid::from_str(DONT_CARE_REF).unwrap();
-}
 
 fn verify_commit_signatures<G: Git>(git: &G, commits: &Vec<Commit<'_>>) -> Result<(), Box<dyn Error>> {
     debug!("Verify commit signatures");
