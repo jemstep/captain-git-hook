@@ -27,7 +27,7 @@ pub trait Git: Sized {
     fn find_common_ancestor(&self, commit1_id: Oid, commit2_id: Oid) -> Result<Oid, Box<dyn Error>>;
     fn pushed(&self,commit_id: Oid) -> Result<bool, Box<dyn Error>>;
     fn not_merge_commit(commit: &Commit<'_>) -> bool;
-    fn merge_commit(from_id: Oid, new_commit: &Commit<'_>) -> bool;
+    fn merge_commit(new_commit: &Commit<'_>) -> bool;
     fn verify_commit_signature(&self,commit_id: Oid) -> Result<String, Box<dyn Error>>;
     
     fn read_config(&self) -> Result<Config, Box<dyn Error>> {
@@ -153,16 +153,18 @@ impl Git for LiveGit {
         let mut commit_fingerprints = HashSet::new();
 
         for commit in commits.iter() {
-            let author = commit.author();
-            let commit_email = match author.email() {
-                Some(e) => e,
-                None => return Err(Box::new(CapnError::new(format!("Email on commit not found"))))
-            };
-            let fingerprint = team_fingerprints.get(commit_email);
-            match fingerprint{
-                Some(f) => commit_fingerprints.insert(f.id.to_string()),
-                None => return Err(Box::new(CapnError::new(format!("Team fingerprint not found"))))
-            };
+            if Self::not_merge_commit(commit) {
+                let committer = commit.committer();
+                let commit_email = match committer.email() {
+                    Some(e) => e,
+                    None => return Err(Box::new(CapnError::new(format!("Email on commit not found"))))
+                };
+                let fingerprint = team_fingerprints.get(commit_email);
+                match fingerprint{
+                    Some(f) => commit_fingerprints.insert(f.id.to_string()),
+                    None => return Err(Box::new(CapnError::new(format!("Team fingerprint not found"))))
+                };
+            }
         }
         Ok(commit_fingerprints)
     }
@@ -279,9 +281,9 @@ impl Git for LiveGit {
         return if parent_count == 1 { true } else { false };
     }
 
-    fn merge_commit(from_id: Oid, new_commit: &Commit<'_>) -> bool {
+    fn merge_commit(new_commit: &Commit<'_>) -> bool {
         let parent_count = new_commit.parent_count();
-        return if parent_count > 1 && from_id != Self::dont_care_ref() { true } else { false };
+        return if parent_count > 1 { true } else { false };
     }
    
 }

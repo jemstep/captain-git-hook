@@ -32,7 +32,8 @@ pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_v
     if !G::is_deleted_branch(new_commit_id) {
 
         let new_commit = git.find_commit(new_commit_id)?;
-        let merging = G::merge_commit(old_commit_id, &new_commit);
+        let new_branch = G::is_new_branch(old_commit_id);
+        let merging = G::merge_commit(&new_commit) && !new_branch;
         let commits = commits_to_verify(&git, old_commit_id, new_commit)?;
         let commit_fingerprints = git.find_commit_fingerprints(&config.team_fingerprints_file, &commits)?;
 
@@ -71,7 +72,7 @@ fn commits_to_verify<'a, G: Git>(git: &'a G, old_commit_id: Oid, new_commit: Com
     if G::is_new_branch(old_commit_id) {
         info!("NEW BRANCH detected");
         commits = git.find_unpushed_commits(new_commit.id())?;
-    } else if G::merge_commit(old_commit_id, &new_commit) {
+    } else if G::merge_commit(&new_commit) {
         info!("MERGE detected");
         match new_commit.parents().nth(1) {
             Some(second_parent) => {
