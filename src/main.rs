@@ -5,6 +5,7 @@ use std::process::exit;
 use capn::git::{LiveGit, Git};
 use capn::gpg::LiveGpg;
 use capn::fs::LiveFs;
+use capn::pretty::*;
 use capn::*;
 
 use stderrlog;
@@ -55,7 +56,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .verbosity(opt.verbose + 2) // Default is info
         .init()?;
     
-    info!("Aargh, Matey! Welcome to Capn Githook!");
+    info!("{}", block("Ahoy, maties! Welcome to Capn Githook!"));
 
     let config = match LiveGit::new()?.read_config() {
         Ok(c) => c,
@@ -65,9 +66,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     };
 
-    debug!("Configuration: {:#?}", config);
+    debug!("Configuration: {:#?}\n", config);
 
-    match opt.command {
+    let result = match opt.command {
         Command::PrepareCommitMsg(x) => prepare_commit_msg::<LiveFs, LiveGit>(x, config),
         Command::PrePush(x) => {
             for raw_line in stdin().lock().lines() {
@@ -102,5 +103,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             Ok(())
         },
         Command::InstallHooks => install_hooks::<LiveGit>(),
-    }
+    };
+    info!("{}", block("Aye, me hearties! Welcome aboard!"));
+    result
 }

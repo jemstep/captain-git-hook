@@ -3,6 +3,7 @@ use crate::gpg::*;
 use crate::fs::*;
 use crate::error::CapnError;
 use crate::config::VerifyGitCommitsConfig;
+use crate::pretty::*;
 
 use git2::{Commit, Oid};
 use std::error::Error;
@@ -22,8 +23,7 @@ pub fn prepend_branch_name<F: Fs, G: Git>(commit_file: PathBuf) -> Result<(), Bo
 }
 
 pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_value: &str, new_value: &str,_ref_name: &str) -> Result<(), Box<dyn Error>> {
-    debug!("Executing policy: verify_git_commits");
-    
+    info!("verify_git_commits STARTED");
     let git = G::new()?;
     let start = Instant::now();
     let old_commit_id = Oid::from_str(old_value)?;
@@ -35,6 +35,7 @@ pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_v
         let new_branch = G::is_new_branch(old_commit_id);
         let merging = G::merge_commit(&new_commit) && !new_branch;
         let commits = commits_to_verify(&git, old_commit_id, new_commit)?;
+        info!("Find fingerprints for commits");
         let commit_fingerprints = git.find_commit_fingerprints(&config.team_fingerprints_file, &commits)?;
 
         if config.recv_keys_par {
@@ -56,12 +57,12 @@ pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_v
         }
 
     } else {
-        info!("DELETE BRANCH detected, not verifying.")
+        info!("{}", block("DELETE BRANCH detected, not verifying."))
     }
 
     let duration = start.elapsed();
 
-    info!("verify_git_commits completed in: {} ms", duration.as_millis());
+    info!("verify_git_commits COMPLETED in: {} ms", duration.as_millis());
 
     Ok(())
     // return Err(Box::new(CapnError::new(format!("Error on verify git commits for testing"))));
@@ -70,10 +71,10 @@ pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_v
 fn commits_to_verify<'a, G: Git>(git: &'a G, old_commit_id: Oid, new_commit: Commit<'a>) -> Result<Vec<Commit<'a>>, Box<dyn Error>>  {
     let mut commits = Vec::new();
     if G::is_new_branch(old_commit_id) {
-        info!("NEW BRANCH detected");
+        info!("{}", block("NEW BRANCH detected"));
         commits = git.find_unpushed_commits(new_commit.id())?;
     } else if G::merge_commit(&new_commit) {
-        info!("MERGE detected");
+        info!("{}", block("MERGE detected"));
         match new_commit.parents().nth(1) {
             Some(second_parent) => {
                 commits.push(new_commit);
@@ -91,18 +92,18 @@ fn commits_to_verify<'a, G: Git>(git: &'a G, old_commit_id: Oid, new_commit: Com
 
 
 fn verify_commit_signatures<G: Git>(git: &G, commits: &Vec<Commit<'_>>) -> Result<(), Box<dyn Error>> {
-    debug!("Verify commit signatures");
+    info!("Verify commit signatures");
     for commit in commits.iter() {
         if G::not_merge_commit(commit) {
-            let _fingerprint = git.verify_commit_signature(commit.id())?;
+            let _fingerprint = git.verify_commit_signature(commit)?;
         }
     }
     Ok(())
 }
 
 fn verify_different_authors<G: Git>(commits: &Vec<Commit<'_>>) -> Result<(), Box<dyn Error>> {
+    info!("Verify multiple authors");
     let authors : HashSet<_> = commits.iter().filter_map(|c| {
-        G::debug_commit(&c);
         match c.author().name() {
             Some(n) => Some(n.to_string()),
             _ => None
@@ -116,7 +117,7 @@ fn verify_different_authors<G: Git>(commits: &Vec<Commit<'_>>) -> Result<(), Box
 }
 
 fn verify_email_addresses(author_domain: &str,committer_domain: &str, commits: &Vec<Commit<'_>>) -> Result<(), Box<dyn Error>> {
-    debug!("Verify email addresses");
+    info!("Verify email addresses");
     
     for commit in commits.iter() {
         match commit.author().email(){
