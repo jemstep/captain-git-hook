@@ -58,6 +58,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     
     info!("{}", block("Ahoy, maties! Welcome to Capn Githook!"));
 
+    info!("Read configuration file");
     let config = match LiveGit::new()?.read_config() {
         Ok(c) => c,
         Err(e) => {

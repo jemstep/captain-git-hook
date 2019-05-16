@@ -39,8 +39,8 @@ pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_v
         info!("Number of commits to verify {} : ", commits.len());
         for commit in &commits { G::debug_commit(&commit) };
         info!("{}", seperator(""));
+        info!("Find fingerprints for commits, and receive associated gpg keys");
         let commit_fingerprints = git.find_commit_fingerprints(&config.team_fingerprints_file, &commits)?;
-        debug!("{:#?}", commit_fingerprints);
         if config.recv_keys_par {
             let _result = P::par_receive_keys(&config.keyserver,&commit_fingerprints)?;
         } else {
