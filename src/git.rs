@@ -37,7 +37,7 @@ pub trait Git: Sized {
     }
 
     fn debug_commit(commit: &Commit<'_>) {
-        debug!("commit {}", commit.id());
+        debug!("CommitId: {}", commit.id());
         if commit.parents().len() > 1 {
             debug!("Merge:");
             for id in commit.parent_ids() {
@@ -49,7 +49,7 @@ pub trait Git: Sized {
         debug!("Author: {}", author);
         let committer = commit.committer();
         debug!("Committer: {}", committer);
-        debug!("");
+        debug!("Message:");
         for line in String::from_utf8_lossy(commit.message_bytes()).lines() {
             debug!("    {}", line);
         }
@@ -197,8 +197,6 @@ impl Git for LiveGit {
         let commits : Vec<_> = CommitIterator::new(&self.repo, Some(to_id))
         .take_while(|c| c.id() != from_id)
         .collect();
-
-        debug!("Commits found {:#?}\n",commits);
         Ok(commits)
     }
 
@@ -213,14 +211,12 @@ impl Git for LiveGit {
             }
         })
         .collect();
-
-        debug!("Unpushed Commits found {:#?}\n",commits);
         Ok(commits)
     }
 
     fn verify_commit_signature(&self, commit: &Commit<'_>) -> Result<String, Box<dyn Error>> {
         let commit_id = commit.id();
-        debug!("Verify commit {}", commit_id);
+        debug!("Verify signature for commit {}", commit_id);
         let repo_path = self.repo.path();
         let result = Command::new("git")
             .current_dir(repo_path)
@@ -229,10 +225,9 @@ impl Git for LiveGit {
             .arg(commit_id.to_string())
             .output()?;
         debug!("RESULT {:?}", result);
-        if result.status.success() {
-            let error_message = format!("Call to git verify failed for commit {} with status {}", commit_id, result.status);
-            error!("{}", error_message);
-            Self::debug_commit(commit);
+        if !result.status.success() {
+            let error_message = format!("Call to git verify failed for commit {} : status {} : author {:?} : committer {:?}",
+             commit_id, result.status, commit.author().name(), commit.committer().name());
             return Err(Box::new(CapnError::new(error_message)));
         }
 
@@ -246,9 +241,8 @@ impl Git for LiveGit {
         match first {
             Some(f) => return Ok(f.to_string()),
             None => {
-                let error_message = format!("Valid fingerprint for commit {} not found", commit_id);
-                error!("{}", error_message);
-                Self::debug_commit(commit);
+                let error_message = format!("Valid fingerprint for commit {} : author {:?} : committer {:?}",
+                 commit_id, commit.author().name(), commit.committer().name());
                 return Err(Box::new(CapnError::new(error_message)))
             }
         };

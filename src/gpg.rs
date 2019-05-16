@@ -23,7 +23,7 @@ impl Gpg for LiveGpg {
             .output()?;
 
         if !result.status.success() {
-            return Err(Box::new(CapnError::new(format!("Call to GPG failed with staus {}", result.status))));
+            return Err(Box::new(CapnError::new(format!("Call to GPG failed with status {}", result.status))));
         }
 
         let encoded = String::from_utf8(result.stdout)?;

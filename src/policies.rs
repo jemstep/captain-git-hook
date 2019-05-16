@@ -23,7 +23,7 @@ pub fn prepend_branch_name<F: Fs, G: Git>(commit_file: PathBuf) -> Result<(), Bo
 }
 
 pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_value: &str, new_value: &str,_ref_name: &str) -> Result<(), Box<dyn Error>> {
-    info!("verify_git_commits STARTED");
+    info!("{}", seperator("verify_git_commits STARTED"));
     let git = G::new()?;
     let start = Instant::now();
     let old_commit_id = Oid::from_str(old_value)?;
@@ -35,25 +35,31 @@ pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_v
         let new_branch = G::is_new_branch(old_commit_id);
         let merging = G::merge_commit(&new_commit) && !new_branch;
         let commits = commits_to_verify(&git, old_commit_id, new_commit)?;
-        info!("Find fingerprints for commits");
-        let commit_fingerprints = git.find_commit_fingerprints(&config.team_fingerprints_file, &commits)?;
 
+        info!("Number of commits to verify {} : ", commits.len());
+        for commit in &commits { G::debug_commit(&commit) };
+        info!("{}", seperator(""));
+        let commit_fingerprints = git.find_commit_fingerprints(&config.team_fingerprints_file, &commits)?;
+        debug!("{:#?}", commit_fingerprints);
         if config.recv_keys_par {
             let _result = P::par_receive_keys(&config.keyserver,&commit_fingerprints)?;
         } else {
             let _result = P::receive_keys(&config.keyserver,&commit_fingerprints)?;
         }
-
+        info!("{}", seperator(""));
         if config.verify_email_addresses {
             verify_email_addresses(&config.author_domain, &config.committer_domain, &commits)?;
+            info!("{}", seperator(""));
         }
-
+       
         if config.verify_commit_signatures {
             verify_commit_signatures::<G>(&git, &commits)?;
+            info!("{}", seperator(""));
         }
-
+        
         if merging && config.verify_different_authors {
             verify_different_authors::<G>(&commits)?;
+            info!("{}", seperator(""));
         }
 
     } else {
@@ -82,7 +88,7 @@ fn commits_to_verify<'a, G: Git>(git: &'a G, old_commit_id: Oid, new_commit: Com
                 let mut commits2 = git.find_commits(common_ancestor_id, second_parent.id())?;
                 commits.append(&mut commits2);
             },
-            None => return Err(Box::new(CapnError::new(format!("Second parent not found for merge commit"))))
+            None => return Err(Box::new(CapnError::new(format!("Second parent not found for merge commit {}", new_commit.id()))))
         };
     } else {
         commits = git.find_commits(old_commit_id, new_commit.id())?;
@@ -118,20 +124,24 @@ fn verify_different_authors<G: Git>(commits: &Vec<Commit<'_>>) -> Result<(), Box
 
 fn verify_email_addresses(author_domain: &str,committer_domain: &str, commits: &Vec<Commit<'_>>) -> Result<(), Box<dyn Error>> {
     info!("Verify email addresses");
-    
     for commit in commits.iter() {
+        debug!("Verify author, committer email addresses for commit {}", commit.id());
         match commit.author().email(){
             Some(s) => if s.contains(author_domain) == false {
-                    return Err(Box::new(CapnError::new(format!("Author email address incorrect"))))
+                    return Err(Box::new(CapnError::new(format!("Author {:?} : Commit {} : Email address {:?} incorrect.",
+                        commit.author().name(), commit.id(), commit.author().email()))))
                 },
-            None => return Err(Box::new(CapnError::new(format!("Author email address incorrect"))))
+            None => return Err(Box::new(CapnError::new(format!("Author {:?} : Commit {} : No email address.",
+                        commit.author().name(), commit.id()))))
         }
 
         match commit.committer().email(){
             Some(s) => if s.contains(committer_domain) == false {
-                    return Err(Box::new(CapnError::new(format!("Committer email address incorrect"))))
+                     return Err(Box::new(CapnError::new(format!("Committer {:?} : Commit {} : Email address {:?} incorrect.",
+                        commit.committer().name(), commit.id(), commit.committer().email()))))
                 },
-            None => return Err(Box::new(CapnError::new(format!("Committer email address incorrect"))))
+              None => return Err(Box::new(CapnError::new(format!("Committer {:?} : Commit {} : No email address.",
+                        commit.committer().name(), commit.id()))))
         }
     }
     Ok(())
