@@ -23,7 +23,7 @@ impl Gpg for LiveGpg {
             .output()?;
 
         if !result.status.success() {
-            return Err(Box::new(CapnError::new(format!("Call to GPG failed with staus {}", result.status))));
+            return Err(Box::new(CapnError::new(format!("Call to GPG failed with status {}", result.status))));
         }
 
         let encoded = String::from_utf8(result.stdout)?;
@@ -36,7 +36,7 @@ impl Gpg for LiveGpg {
     }
 
     fn receive_key(key_server: &str, fingerprint: &str) -> Result<(), Box<dyn Error>> {
-        debug!("Receiving keys for fingerprint {:?}",fingerprint);
+        debug!("Receiving key for fingerprint {:?}",fingerprint);
 
         let result = Command::new("gpg")
             .args(&["--keyserver",key_server])
@@ -53,8 +53,6 @@ impl Gpg for LiveGpg {
 
 
     fn receive_keys(key_server: &str, fingerprints: &HashSet<String>) -> Result<(), Box<dyn Error>> {
-        debug!("Receiving keys for fingerprints {:?}",fingerprints);
-
         let result = Command::new("gpg")
             .args(&["--keyserver",key_server])
             .arg("--recv-keys")
@@ -69,15 +67,12 @@ impl Gpg for LiveGpg {
     }
 
     fn par_receive_keys(key_server: &str, fingerprints: &HashSet<String>) -> Result<(), Box<dyn Error>> {
-        debug!("Receiving keys for fingerprints in PARALLEL");
-
         let _r : Vec<_> = fingerprints.par_iter().map(|fp| {
-            match Self::receive_key(&key_server, fp){
-                Ok(o) => o,
-                Err(e) => error!("Error receiving key for {} : {}", fp, e)
-            };
-            }
-            ).collect();
+                match Self::receive_key(&key_server, fp) {
+                    Ok(o) => o,
+                    Err(e) => error!("Error receiving key for {} : {}", fp, e)
+                };
+            }).collect();
         Ok(())
     }
 }
