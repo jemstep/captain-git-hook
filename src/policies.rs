@@ -29,8 +29,11 @@ pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_v
     let old_commit_id = Oid::from_str(old_value)?;
     let new_commit_id = Oid::from_str(new_value)?;
 
-    if !G::is_deleted_branch(new_commit_id) {
-
+    if G::is_deleted_branch(new_commit_id) {
+        info!("{}", block("DELETE BRANCH detected, no commits to verify."))
+    } else if git.is_tag(new_commit_id) {
+        info!("{}", block("TAG detected, no commits to verify."))
+    } else {
         let new_commit = git.find_commit(new_commit_id)?;
         let new_branch = G::is_new_branch(old_commit_id);
         let merging = G::merge_commit(&new_commit) && !new_branch;
@@ -61,9 +64,6 @@ pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_v
             verify_different_authors::<G>(&commits)?;
             info!("{}", seperator(""));
         }
-
-    } else {
-        info!("{}", block("DELETE BRANCH detected, not verifying."))
     }
 
     let duration = start.elapsed();
