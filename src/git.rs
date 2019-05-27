@@ -21,6 +21,7 @@ pub trait Git: Sized {
     fn current_branch(&self) -> Result<String, Box<dyn Error>>;
     fn log(&self) -> Result<(), Box<dyn Error>>;
     fn find_commits(&self,from_id: Oid,to_id: Oid) -> Result<Vec<Commit<'_>>, Box<dyn Error>>;
+    fn is_tag(&self, id: Oid) -> bool;
     fn find_unpushed_commits(&self, new_commit_id: Oid) -> Result<Vec<Commit<'_>>, Box<dyn Error>>;
     fn find_commit(&self,commit_id: Oid) -> Result<Commit<'_>, Box<dyn Error>>;
     fn find_commit_fingerprints(&self, team_fingerprint_file: &str, commits: &Vec<Commit<'_>>) -> Result<HashSet<String>, Box<dyn Error>>;
@@ -285,6 +286,13 @@ impl Git for LiveGit {
     fn merge_commit(new_commit: &Commit<'_>) -> bool {
         let parent_count = new_commit.parent_count();
         return if parent_count > 1 { true } else { false };
+    }
+
+    fn is_tag(&self, id: Oid) -> bool {
+        match self.repo.find_tag(id) {
+            Ok(_) => true,
+            _ => false
+        }
     }
    
 }
