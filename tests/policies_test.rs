@@ -3,11 +3,13 @@ use capn::policies;
 use capn::git::LiveGit;
 use capn::gpg::LiveGpg;
 
-#[test]
-fn verify_git_commits() {
-    std::env::set_current_dir("./tests/test-repo.git").unwrap();
-    
-    let config = VerifyGitCommitsConfig {
+fn set_current_dir_to_test_repo() {
+    let project_root = env!("CARGO_MANIFEST_DIR");
+    std::env::set_current_dir(format!("{}/tests/test-repo.git", project_root)).unwrap();
+}
+
+fn verify_commits_config() -> VerifyGitCommitsConfig {
+    VerifyGitCommitsConfig {
         author_domain : "jemstep.com".to_string(), 
         committer_domain : "jemstep.com".to_string(),
         keyserver : "hkp://pgp.jemstep.com:80".to_string(),
@@ -16,8 +18,19 @@ fn verify_git_commits() {
         verify_email_addresses: true,
         verify_commit_signatures: true,
         verify_different_authors: true
-    };
+    }
+}
 
-    let result = policies::verify_git_commits::<LiveGit, LiveGpg>(&config, "0000000000000000000000000000000000000000","69841d34d7dbef6d70ea9f59419c9fed7749575f","master");
+#[test]
+fn verify_git_commits_happy_path_from_empty() {
+    set_current_dir_to_test_repo();
+    let result = policies::verify_git_commits::<LiveGit, LiveGpg>(&verify_commits_config(), "0000000000000000000000000000000000000000","69841d34d7dbef6d70ea9f59419c9fed7749575f","master");
+    assert!(result.is_ok(), "Error: {:?}", result);
+}
+
+#[test]
+fn verify_git_commits_happy_path_from_existing() {
+    set_current_dir_to_test_repo();
+    let result = policies::verify_git_commits::<LiveGit, LiveGpg>(&verify_commits_config(), "69841d34d7dbef6d70ea9f59419c9fed7749575f","d4fd2666752b521da43735d64700f5a99329a126","master");
     assert!(result.is_ok(), "Error: {:?}", result);
 }
