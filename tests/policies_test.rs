@@ -23,9 +23,17 @@ fn verify_commits_config() -> VerifyGitCommitsConfig {
     }
 }
 
-// To create valid commits for these tests, you need to sign the
-// commits with the secret key in ./test-secret-key.asc. The password
-// to import this key is 'test'.
+/// Many of these tests require a test git repo in a particular
+/// state. This is a bare git repo, checked into this repo
+/// (./test-repo.git). To add extra scenarios, you'll probably need to
+/// add additional commits to this bare repo. To do this, clone the
+/// repo somewhere else on your drive with `git clone <path to
+/// test-repo.git>`, make any required commits, and push the changes
+/// back. Then commit the changes in this repo.
+///
+/// To create valid commits for these tests, you need to sign the
+/// commits with the secret key in ./test-secret-key.asc. The password
+/// to import this key is 'test'.
 
 #[test]
 fn verify_git_commits_happy_path_from_empty() {
