@@ -5,6 +5,8 @@ use capn::gpg::LiveGpg;
 
 fn set_current_dir_to_test_repo() {
     let project_root = env!("CARGO_MANIFEST_DIR");
+    println!("Project root: {}", project_root);
+    println!("Current dir: {:?}", std::env::current_dir());
     std::env::set_current_dir(format!("{}/tests/test-repo.git", project_root)).unwrap();
 }
 
