@@ -26,13 +26,20 @@ fn verify_commits_config() -> VerifyGitCommitsConfig {
 #[test]
 fn verify_git_commits_happy_path_from_empty() {
     set_current_dir_to_test_repo();
-    let result = policies::verify_git_commits::<LiveGit, LiveGpg>(&verify_commits_config(), "0000000000000000000000000000000000000000","69841d34d7dbef6d70ea9f59419c9fed7749575f","master");
+    let result = policies::verify_git_commits::<LiveGit, LiveGpg>(&verify_commits_config(), "0000000000000000000000000000000000000000", "69841d34d7dbef6d70ea9f59419c9fed7749575f","master");
     assert!(result.is_ok(), "Error: {:?}", result);
 }
 
 #[test]
 fn verify_git_commits_happy_path_from_existing() {
     set_current_dir_to_test_repo();
-    let result = policies::verify_git_commits::<LiveGit, LiveGpg>(&verify_commits_config(), "69841d34d7dbef6d70ea9f59419c9fed7749575f","d4fd2666752b521da43735d64700f5a99329a126","master");
+    let result = policies::verify_git_commits::<LiveGit, LiveGpg>(&verify_commits_config(), "69841d34d7dbef6d70ea9f59419c9fed7749575f", "d4fd2666752b521da43735d64700f5a99329a126","master");
     assert!(result.is_ok(), "Error: {:?}", result);
+}
+
+#[test]
+fn verify_git_commits_single_unsigned_commit() {
+    set_current_dir_to_test_repo();
+    let result = policies::verify_git_commits::<LiveGit, LiveGpg>(&verify_commits_config(), "d4fd2666752b521da43735d64700f5a99329a126", "be693bc8ea72bf161e1003480eacf5cc4dcc23cd","master");
+    assert!(result.is_err());
 }
