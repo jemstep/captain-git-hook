@@ -14,7 +14,7 @@ fn verify_commits_config() -> VerifyGitCommitsConfig {
     VerifyGitCommitsConfig {
         author_domain : "jemstep.com".to_string(), 
         committer_domain : "jemstep.com".to_string(),
-        keyserver : "hkp://pgp.jemstep.com:80".to_string(),
+        keyserver : "hkp://p80.pool.sks-keyservers.net".to_string(),
         team_fingerprints_file: "TEAM_FINGERPRINTS".to_string(),
         recv_keys_par : true,
         verify_email_addresses: true,
