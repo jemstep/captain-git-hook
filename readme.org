@@ -78,7 +78,33 @@ project's repo. This configuration file is in TOML format.
 
 This is an example ~.capn~ file: [[./.capn]]
 
-** License
+
+* Development
+
+** Integration tests
+Some of the end to end tests require a valid Git repository and GPG
+key to run.
+
+To facilitate this, there is a bare Git repo, set up as a test
+repository, checked in to the tests folder of this repo. It is located
+at [[./tests/test-repo.git]].
+
+To add extra testing scenarios, you'll probably need to add additional
+commits to this bare repo. To do this, clone the repo somewhere else
+on your drive with 
+
+#+BEGIN_SRC sh
+  git clone <path to test-repo.git>
+#+END_SRC
+
+Make any required commits, and push the changes back. Then commit the
+changes in this repo.
+
+To create valid commits for these tests, you need to sign the commits
+with the secret key in [[./tests/test-secret-key.asc]]. The password to
+import this key is 'test'.
+
+* License
 
 This software may be used under the conditions of the Apache License.
 
