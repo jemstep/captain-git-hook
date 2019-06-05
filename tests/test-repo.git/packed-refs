@@ -1,3 +1,4 @@
 # pack-refs with: peeled fully-peeled sorted 
 eb5e0185546b0bb1a13feec6b9ee8b39985fea42 refs/heads/master
 d2e3bfdc923986d04e7a6368b5fdd78b1ddf84f1 refs/heads/unsigned
+e9752e78505f3c9bcec15d4bef4299caf0538388 refs/heads/unsigned-buried-behind-merge
