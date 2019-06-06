@@ -17,4 +17,4 @@ before_install:
   - if [[ "$TRAVIS_OS_NAME" == "windows" ]]; then choco install gnupg-modern; fi
 
 after_script:
-  - ps -ef
+  - gpgconf --kill dirmngr
