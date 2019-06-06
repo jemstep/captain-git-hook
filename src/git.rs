@@ -195,16 +195,15 @@ impl Git for LiveGit {
     fn find_commits(&self, from_id: Oid, to_id: Oid) -> Result<Vec<Commit<'_>>, Box<dyn Error>> {
         info!("Find commits between {} to {}", from_id, to_id);
 
-        let commits : Vec<_> = CommitIterator::new(&self.repo, Some(to_id))
-        .take_while(|c| c.id() != from_id)
-        .collect();
+        let commits: Vec<_> = CommitIterator::range(&self.repo, from_id, to_id)
+            .collect();
         Ok(commits)
     }
 
     fn find_unpushed_commits(&self, new_commit_id: Oid) -> Result<Vec<Commit<'_>>, Box<dyn Error>> {
         info!("Get unpushed commits from {} ", new_commit_id);
 
-        let commits : Vec<_> = CommitIterator::new(&self.repo, Some(new_commit_id))
+        let commits : Vec<_> = CommitIterator::new(&self.repo, new_commit_id)
         .take_while(|c| {
             match self.pushed(c.id()) {
                 Ok(p) => !p,
@@ -299,12 +298,22 @@ impl Git for LiveGit {
 
 struct CommitIterator<'a> {
     repo: &'a Repository,
-    current_commit_id: Option<Oid>
+    to: Vec<Oid>,
+    from: Option<Oid>    
 }
 
 impl CommitIterator<'_>  {
-    fn new(repo: &Repository,initial_commit_id: Option<Oid> ) -> CommitIterator<'_>  {
-        CommitIterator { repo : repo, current_commit_id : initial_commit_id }
+    fn new(repo: &Repository, to: Oid) -> CommitIterator<'_>  {
+        CommitIterator { repo : repo, from: None, to: vec!(to) }
+    }
+    
+    fn range(repo: &Repository, from: Oid, to: Oid) -> CommitIterator<'_>  {
+        let to_collection = if from == to {
+            Vec::new()
+        } else {
+            vec!(to)
+        };
+        CommitIterator { repo : repo, from: Some(from), to: to_collection  }
     }
 }
 
@@ -312,25 +321,15 @@ impl<'a> Iterator for CommitIterator<'a>  {
     type Item = Commit<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let commit = self.current_commit_id.map(|id| {
-            let current_commit = self.repo.find_commit(id);
-            match current_commit {
-                Ok(c) => {
-                    let parent_count = c.parent_count();
-                    if parent_count == 0 || parent_count > 1 {
-                        self.current_commit_id = None;
-                    } else {
-                        let parent = c.parents().nth(0);
-                        self.current_commit_id = match parent {
-                            Some(p) => Some(p.id()),
-                            _ => None
-                        };
-                    }
-                    return Some(c);
-                },
-                Err(_) => return None
-            }
-        });
-        return commit.and_then(|c| c);
+        let next_id = self.to.pop();
+        let next_commit = next_id.and_then(|id| self.repo.find_commit(id).ok());
+
+        if let Some(commit) = &next_commit {
+            self.to.append(&mut commit.parent_ids()
+                           .filter(|id| Some(*id) != self.from)
+                           .collect());
+        };
+
+        next_commit
     }
 }

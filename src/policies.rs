@@ -42,13 +42,19 @@ pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_v
         info!("Number of commits to verify {} : ", commits.len());
         for commit in &commits { G::debug_commit(&commit) };
         info!("{}", seperator(""));
-        info!("Find fingerprints for commits, and receive associated gpg keys");
-        let commit_fingerprints = git.find_commit_fingerprints(&config.team_fingerprints_file, &commits)?;
-        if config.recv_keys_par {
-            let _result = P::par_receive_keys(&config.keyserver,&commit_fingerprints)?;
+
+        if config.skip_recv_keys {
+            info!("Skipping importing GPG keys");
         } else {
-            let _result = P::receive_keys(&config.keyserver,&commit_fingerprints)?;
+            info!("Find fingerprints for commits, and receive associated gpg keys");
+            let commit_fingerprints = git.find_commit_fingerprints(&config.team_fingerprints_file, &commits)?;
+            if config.recv_keys_par {
+                let _result = P::par_receive_keys(&config.keyserver,&commit_fingerprints)?;
+            } else {
+                let _result = P::receive_keys(&config.keyserver,&commit_fingerprints)?;
+            }
         }
+        
         info!("{}", seperator(""));
         if config.verify_email_addresses {
             verify_email_addresses(&config.author_domain, &config.committer_domain, &commits)?;
