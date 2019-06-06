@@ -133,7 +133,7 @@ fn verify_email_addresses(author_domain: &str,committer_domain: &str, commits: &
     for commit in commits.iter() {
         debug!("Verify author, committer email addresses for commit {}", commit.id());
         match commit.author().email(){
-            Some(s) => if s.contains(author_domain) == false {
+            Some(s) => if !s.ends_with(&format!("@{}", author_domain)) {
                     return Err(Box::new(CapnError::new(format!("Author {:?} : Commit {} : Email address {:?} incorrect.",
                         commit.author().name(), commit.id(), commit.author().email()))))
                 },
@@ -142,7 +142,7 @@ fn verify_email_addresses(author_domain: &str,committer_domain: &str, commits: &
         }
 
         match commit.committer().email(){
-            Some(s) => if s.contains(committer_domain) == false {
+            Some(s) => if !s.ends_with(&format!("@{}", committer_domain)) {
                      return Err(Box::new(CapnError::new(format!("Committer {:?} : Commit {} : Email address {:?} incorrect.",
                         commit.committer().name(), commit.id(), commit.committer().email()))))
                 },

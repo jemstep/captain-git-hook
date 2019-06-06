@@ -87,3 +87,11 @@ fn verify_git_commits_unsigned_commit_behind_a_merge_commit() {
     let result = policies::verify_git_commits::<LiveGit, LiveGpg>(&verify_commits_config(), "eb5e0185546b0bb1a13feec6b9ee8b39985fea42", "e9752e78505f3c9bcec15d4bef4299caf0538388", "master");
     assert!(result.is_err());
 }
+
+#[test]
+fn verify_git_commits_invalid_author() {
+    set_current_dir_to_test_repo();
+    import_test_key();
+    let result = policies::verify_git_commits::<LiveGit, LiveGpg>(&verify_commits_config(), "eb5e0185546b0bb1a13feec6b9ee8b39985fea42", "afe2141ef20abd098927adc66d6728821cb34f59", "master");
+    assert!(result.is_err());
+}
