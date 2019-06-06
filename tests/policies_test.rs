@@ -5,6 +5,13 @@ use capn::gpg::LiveGpg;
 
 use std::process::*;
 
+
+fn init_logging() {
+    let _ = stderrlog::new()
+        .verbosity(5)
+        .init();
+}
+
 fn set_current_dir_to_test_repo() {
     let project_root = env!("CARGO_MANIFEST_DIR");
     std::env::set_current_dir(format!("{}/tests/test-repo.git", project_root)).unwrap();
@@ -54,6 +61,14 @@ fn verify_git_commits_single_unsigned_commit() {
     set_current_dir_to_test_repo();
     import_test_key();
     let result = policies::verify_git_commits::<LiveGit, LiveGpg>(&verify_commits_config(), "eb5e0185546b0bb1a13feec6b9ee8b39985fea42", "d2e3bfdc923986d04e7a6368b5fdd78b1ddf84f1", "master");
+    assert!(result.is_err());
+}
+
+#[test]
+fn verify_git_commits_single_unsigned_commit_new_branch() {
+    set_current_dir_to_test_repo();
+    import_test_key();
+    let result = policies::verify_git_commits::<LiveGit, LiveGpg>(&verify_commits_config(), "0000000000000000000000000000000000000000", "d2e3bfdc923986d04e7a6368b5fdd78b1ddf84f1", "unsigned");
     assert!(result.is_err());
 }
 

@@ -203,15 +203,16 @@ impl Git for LiveGit {
     fn find_unpushed_commits(&self, new_commit_id: Oid) -> Result<Vec<Commit<'_>>, Box<dyn Error>> {
         info!("Get unpushed commits from {} ", new_commit_id);
 
-        let commits : Vec<_> = CommitIterator::new(&self.repo, new_commit_id)
-        .take_while(|c| {
-            match self.pushed(c.id()) {
-                Ok(p) => !p,
-                Err(_) => true
+        let head = self.repo.head()?;
+        match head.target() {
+            Some(head_id) => {
+                let base = self.find_common_ancestor(head_id, new_commit_id)?;
+                Ok(CommitIterator::range(&self.repo, base, new_commit_id).collect())
+            },
+            None => {
+                Ok(CommitIterator::new(&self.repo, new_commit_id).collect())
             }
-        })
-        .collect();
-        Ok(commits)
+        }
     }
 
     fn verify_commit_signature(&self, commit: &Commit<'_>) -> Result<String, Box<dyn Error>> {
@@ -251,29 +252,9 @@ impl Git for LiveGit {
 
     fn find_common_ancestor(&self, commit1_id: Oid, commit2_id: Oid) -> Result<Oid, Box<dyn Error>> {
         debug!("Find common ancestor for commits {} {}", commit1_id, commit2_id);
-        let repo_path = self.repo.path();
-        debug!("Repo path {:?}", repo_path);
-        let result = Command::new("git")
-            .current_dir(repo_path)
-            .arg("merge-base")
-            .arg(commit1_id.to_string())
-            .arg(commit2_id.to_string())
-            .output()?;
-        debug!("RESULT {:?}", result);
-        if !result.status.success() {
-            return Err(Box::new(CapnError::new(format!("Call to git merge base failed with status {}", result.status))));
-        }
-
-        let encoded = String::from_utf8(result.stdout)?;
-        let shas = encoded.split('\n')
-            .filter_map(|s| Some(String::from(s)))
-            .collect::<Vec<_>>();
-        let first_sha = shas.first();
-        debug!("Found valid common ancestor : {:?}", first_sha);
-        match first_sha {
-            Some(f) => return Ok(Oid::from_str(f)?),
-            None => return Err(Box::new(CapnError::new(format!("Common ancestors for commits {} {} not found", commit1_id, commit2_id))))
-        };
+        let base = self.repo.merge_base(commit1_id, commit2_id)?;
+        debug!("Found valid common ancestor : {:?}", base);
+        Ok(base)
              
     }
 
