@@ -22,6 +22,7 @@ pub struct VerifyGitCommitsConfig {
     pub keyserver: String,
     pub team_fingerprints_file: String,
     pub recv_keys_par: bool,
+    pub skip_recv_keys: bool,
     pub verify_email_addresses: bool,
     pub verify_commit_signatures: bool,
     pub verify_different_authors: bool
