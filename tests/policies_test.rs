@@ -57,6 +57,14 @@ fn verify_git_commits_happy_path_from_existing() {
 }
 
 #[test]
+fn verify_git_commits_happy_path_unsigned_trivial_merge() {
+    set_current_dir_to_test_repo();
+    import_test_key();
+    let result = policies::verify_git_commits::<LiveGit, LiveGpg>(&verify_commits_config(), "eb5e0185546b0bb1a13feec6b9ee8b39985fea42", "3eb315d10e2ad89555d7bfc78a1db1ce07bce434", "master");
+    assert!(result.is_ok(), "Error: {:?}", result);
+}
+
+#[test]
 fn verify_git_commits_single_unsigned_commit() {
     set_current_dir_to_test_repo();
     import_test_key();
@@ -93,5 +101,13 @@ fn verify_git_commits_invalid_author() {
     set_current_dir_to_test_repo();
     import_test_key();
     let result = policies::verify_git_commits::<LiveGit, LiveGpg>(&verify_commits_config(), "eb5e0185546b0bb1a13feec6b9ee8b39985fea42", "afe2141ef20abd098927adc66d6728821cb34f59", "master");
+    assert!(result.is_err());
+}
+
+#[test]
+fn verify_git_commits_code_injected_into_unsigned_merge() {
+    set_current_dir_to_test_repo();
+    import_test_key();
+    let result = policies::verify_git_commits::<LiveGit, LiveGpg>(&verify_commits_config(), "eb5e0185546b0bb1a13feec6b9ee8b39985fea42", "eef93e7f977c125f92fc78116fc9b881e4055ae8", "master");
     assert!(result.is_err());
 }

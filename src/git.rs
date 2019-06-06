@@ -29,6 +29,8 @@ pub trait Git: Sized {
     fn pushed(&self,commit_id: Oid) -> Result<bool, Box<dyn Error>>;
     fn not_merge_commit(commit: &Commit<'_>) -> bool;
     fn merge_commit(new_commit: &Commit<'_>) -> bool;
+    fn is_identical_tree_to_any_parent(commit: &Commit<'_>) -> bool;
+    
     fn verify_commit_signature(&self,commit: &Commit<'_>) -> Result<String, Box<dyn Error>>;
     
     fn read_config(&self) -> Result<Config, Box<dyn Error>> {
@@ -266,6 +268,11 @@ impl Git for LiveGit {
     fn merge_commit(new_commit: &Commit<'_>) -> bool {
         let parent_count = new_commit.parent_count();
         return if parent_count > 1 { true } else { false };
+    }
+
+    fn is_identical_tree_to_any_parent(commit: &Commit<'_>) -> bool {
+        let tree_id = commit.tree_id();
+        commit.parents().any(|p| p.tree_id() == tree_id)
     }
 
     fn is_tag(&self, id: Oid) -> bool {

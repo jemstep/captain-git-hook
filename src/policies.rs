@@ -106,7 +106,7 @@ fn commits_to_verify<'a, G: Git>(git: &'a G, old_commit_id: Oid, new_commit: Com
 fn verify_commit_signatures<G: Git>(git: &G, commits: &Vec<Commit<'_>>) -> Result<(), Box<dyn Error>> {
     info!("Verify commit signatures");
     for commit in commits.iter() {
-        if G::not_merge_commit(commit) {
+        if !G::is_identical_tree_to_any_parent(commit) {
             let _fingerprint = git.verify_commit_signature(commit)?;
         }
     }
@@ -134,20 +134,20 @@ fn verify_email_addresses(author_domain: &str,committer_domain: &str, commits: &
         debug!("Verify author, committer email addresses for commit {}", commit.id());
         match commit.author().email(){
             Some(s) => if !s.ends_with(&format!("@{}", author_domain)) {
-                    return Err(Box::new(CapnError::new(format!("Author {:?} : Commit {} : Email address {:?} incorrect.",
-                        commit.author().name(), commit.id(), commit.author().email()))))
-                },
+                return Err(Box::new(CapnError::new(format!("Author {:?} : Commit {} : Email address {:?} incorrect.",
+                                                           commit.author().name(), commit.id(), commit.author().email()))))
+            },
             None => return Err(Box::new(CapnError::new(format!("Author {:?} : Commit {} : No email address.",
-                        commit.author().name(), commit.id()))))
+                                                               commit.author().name(), commit.id()))))
         }
 
         match commit.committer().email(){
             Some(s) => if !s.ends_with(&format!("@{}", committer_domain)) {
-                     return Err(Box::new(CapnError::new(format!("Committer {:?} : Commit {} : Email address {:?} incorrect.",
-                        commit.committer().name(), commit.id(), commit.committer().email()))))
-                },
-              None => return Err(Box::new(CapnError::new(format!("Committer {:?} : Commit {} : No email address.",
-                        commit.committer().name(), commit.id()))))
+                return Err(Box::new(CapnError::new(format!("Committer {:?} : Commit {} : Email address {:?} incorrect.",
+                                                           commit.committer().name(), commit.id(), commit.committer().email()))))
+            },
+            None => return Err(Box::new(CapnError::new(format!("Committer {:?} : Commit {} : No email address.",
+                                                               commit.committer().name(), commit.id()))))
         }
     }
     Ok(())
