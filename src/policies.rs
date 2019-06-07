@@ -48,10 +48,11 @@ pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_v
         } else {
             info!("Find fingerprints for commits, and receive associated gpg keys");
             let commit_fingerprints = git.find_commit_fingerprints(&config.team_fingerprints_file, &commits)?;
+            let fingerprint_ids = commit_fingerprints.values().map(|f| f.id.clone()).collect();
             if config.recv_keys_par {
-                let _result = P::par_receive_keys(&config.keyserver,&commit_fingerprints)?;
+                let _result = P::par_receive_keys(&config.keyserver,&fingerprint_ids)?;
             } else {
-                let _result = P::receive_keys(&config.keyserver,&commit_fingerprints)?;
+                let _result = P::receive_keys(&config.keyserver,&fingerprint_ids)?;
             }
         }
         
