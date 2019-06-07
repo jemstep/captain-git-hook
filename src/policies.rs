@@ -106,8 +106,20 @@ fn commits_to_verify<'a, G: Git>(git: &'a G, old_commit_id: Oid, new_commit: Com
 fn verify_commit_signatures<G: Git>(git: &G, commits: &Vec<Commit<'_>>) -> Result<(), Box<dyn Error>> {
     info!("Verify commit signatures");
     for commit in commits.iter() {
-        if !G::is_identical_tree_to_any_parent(commit) {
-            let _fingerprint = git.verify_commit_signature(commit)?;
+        if G::is_identical_tree_to_any_parent(commit) {
+            debug!("{}: verified identical to one of its parents, no signature required", commit.id());
+        } else if G::is_trivial_merge_commit(commit) {
+            debug!("{}: verified to be a trivial merge of its parents, no signature required", commit.id());
+        } else {
+            match git.verify_commit_signature(commit) {
+                Ok(_) => {
+                    debug!("{}: verified with a valid signature", commit.id());
+                },
+                Err(err) => {
+                    debug!("{}: unverified, requies a valid signature", commit.id());
+                    return Err(err);
+                }
+            }
         }
     }
     Ok(())
