@@ -278,25 +278,16 @@ impl Git for LiveGit {
 
     fn is_trivial_merge_commit(&self, commit: &Commit<'_>) -> bool {
         use git2::MergeOptions;
-        
-        if commit.parent_count() == 2 {
-            let tree_id = commit.tree_id();
-            let merge = self.repo.merge_commits(
-                &commit.parents().nth(0).unwrap(),
-                &commit.parents().nth(1).unwrap(),
-                Some(&MergeOptions::new().fail_on_conflict(true))
-            );
-            trace!("merged");
-            if let Ok(mut index) = merge {
-                trace!("success");
-                let written_tree = index.write_tree_to(&self.repo);
-                trace!("tree: {:?}, (requires {:?})", written_tree, tree_id);
-                written_tree == Ok(tree_id)
-            } else {
-                false
+
+        match &commit.parents().collect::<Vec<_>>()[..] {
+            [a, b] => {
+                let tree_id = commit.tree_id();
+                self.repo.merge_commits(&a, &b, Some(MergeOptions::new().fail_on_conflict(true)))
+                    .and_then(|mut index| index.write_tree_to(&self.repo))
+                    .map(|written_tree| written_tree == tree_id)
+                    .unwrap_or(false)
             }
-        } else {
-            false
+            _ => false
         }
     }
 
