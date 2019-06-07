@@ -30,7 +30,7 @@ pub trait Git: Sized {
     fn not_merge_commit(commit: &Commit<'_>) -> bool;
     fn merge_commit(new_commit: &Commit<'_>) -> bool;
     fn is_identical_tree_to_any_parent(commit: &Commit<'_>) -> bool;
-    fn is_trivial_merge_commit(commit: &Commit<'_>) -> bool;
+    fn is_trivial_merge_commit(&self, commit: &Commit<'_>) -> bool;
     
     fn verify_commit_signature(&self,commit: &Commit<'_>) -> Result<String, Box<dyn Error>>;
     
@@ -276,9 +276,28 @@ impl Git for LiveGit {
         commit.parents().any(|p| p.tree_id() == tree_id)
     }
 
-    fn is_trivial_merge_commit(commit: &Commit<'_>) -> bool {
-        let tree_id = commit.tree_id();
-        commit.parents().any(|p| p.tree_id() == tree_id)
+    fn is_trivial_merge_commit(&self, commit: &Commit<'_>) -> bool {
+        use git2::MergeOptions;
+        
+        if commit.parent_count() == 2 {
+            let tree_id = commit.tree_id();
+            let merge = self.repo.merge_commits(
+                &commit.parents().nth(0).unwrap(),
+                &commit.parents().nth(1).unwrap(),
+                Some(&MergeOptions::new().fail_on_conflict(true))
+            );
+            trace!("merged");
+            if let Ok(mut index) = merge {
+                trace!("success");
+                let written_tree = index.write_tree_to(&self.repo);
+                trace!("tree: {:?}, (requires {:?})", written_tree, tree_id);
+                written_tree == Ok(tree_id)
+            } else {
+                false
+            }
+        } else {
+            false
+        }
     }
 
     fn is_tag(&self, id: Oid) -> bool {

@@ -108,7 +108,7 @@ fn verify_commit_signatures<G: Git>(git: &G, commits: &Vec<Commit<'_>>) -> Resul
     for commit in commits.iter() {
         if G::is_identical_tree_to_any_parent(commit) {
             debug!("{}: verified identical to one of its parents, no signature required", commit.id());
-        } else if G::is_trivial_merge_commit(commit) {
+        } else if git.is_trivial_merge_commit(commit) {
             debug!("{}: verified to be a trivial merge of its parents, no signature required", commit.id());
         } else {
             match git.verify_commit_signature(commit) {

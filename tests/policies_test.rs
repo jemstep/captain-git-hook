@@ -74,7 +74,7 @@ fn verify_git_commits_happy_path_unsigned_trivial_merge() {
     init_logging();
     set_current_dir_to_test_repo();
     import_test_key();
-    let result = policies::verify_git_commits::<LiveGit, LiveGpg>(&verify_commits_config(), "eb5e0185546b0bb1a13feec6b9ee8b39985fea42", "4a19ec7a1543fb83f63fbd6e8e0ca17ae6c986a3", "master");
+    let result = policies::verify_git_commits::<LiveGit, LiveGpg>(&verify_commits_config(), "eb5e0185546b0bb1a13feec6b9ee8b39985fea42", "6754e4ec9b2dec567190d5a7f0be18b1a23d632a", "master");
     assert!(result.is_ok(), "Error: {:?}", result);
 }
 
