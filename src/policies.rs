@@ -81,25 +81,12 @@ pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_v
 }
 
 fn commits_to_verify<'a, G: Git>(git: &'a G, old_commit_id: Oid, new_commit: Commit<'a>) -> Result<Vec<Commit<'a>>, Box<dyn Error>>  {
-    let mut commits = Vec::new();
     if G::is_new_branch(old_commit_id) {
         info!("{}", block("NEW BRANCH detected"));
-        commits = git.find_unpushed_commits(new_commit.id())?;
-    } else if G::merge_commit(&new_commit) {
-        info!("{}", block("MERGE detected"));
-        match new_commit.parents().nth(1) {
-            Some(second_parent) => {
-                commits.push(new_commit);
-                let common_ancestor_id = git.find_common_ancestor(old_commit_id, second_parent.id())?;
-                let mut commits2 = git.find_commits(common_ancestor_id, second_parent.id())?;
-                commits.append(&mut commits2);
-            },
-            None => return Err(Box::new(CapnError::new(format!("Second parent not found for merge commit {}", new_commit.id()))))
-        };
+        git.find_unpushed_commits(new_commit.id())
     } else {
-        commits = git.find_commits(old_commit_id, new_commit.id())?;
+        git.find_commits(old_commit_id, new_commit.id())
     }
-    Ok(commits)
 }
 
 

@@ -201,6 +201,7 @@ impl Git for LiveGit {
         let mut revwalk = self.repo.revwalk()?;
         revwalk.push(to_id)?;
         revwalk.hide(from_id)?;
+        revwalk.hide_head()?;
 
         let commits = revwalk.into_iter()
            .map(|id| id.and_then(|id| self.repo.find_commit(id)))
