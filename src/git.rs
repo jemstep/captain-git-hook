@@ -204,7 +204,7 @@ impl Git for LiveGit {
         revwalk.hide_head()?;
 
         let commits = revwalk.into_iter()
-           .map(|id| id.and_then(|id| self.repo.find_commit(id)))
+            .map(|id| id.and_then(|id| self.repo.find_commit(id)))
             .collect::<Result<Vec<_>, git2::Error>>()?;
 
         Ok(commits)
@@ -218,7 +218,7 @@ impl Git for LiveGit {
         revwalk.hide_head()?;
         
         let commits = revwalk.into_iter()
-           .map(|id| id.and_then(|id| self.repo.find_commit(id)))
+            .map(|id| id.and_then(|id| self.repo.find_commit(id)))
             .collect::<Result<Vec<_>, git2::Error>>()?;
 
         Ok(commits)
