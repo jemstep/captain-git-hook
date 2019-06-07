@@ -57,10 +57,18 @@ fn verify_git_commits_happy_path_from_existing() {
 }
 
 #[test]
-fn verify_git_commits_happy_path_unsigned_trivial_merge() {
+fn verify_git_commits_happy_path_unsigned_trivial_no_fast_forward_merge() {
     set_current_dir_to_test_repo();
     import_test_key();
     let result = policies::verify_git_commits::<LiveGit, LiveGpg>(&verify_commits_config(), "eb5e0185546b0bb1a13feec6b9ee8b39985fea42", "3eb315d10e2ad89555d7bfc78a1db1ce07bce434", "master");
+    assert!(result.is_ok(), "Error: {:?}", result);
+}
+
+#[test]
+fn verify_git_commits_happy_path_unsigned_trivial_merge() {
+    set_current_dir_to_test_repo();
+    import_test_key();
+    let result = policies::verify_git_commits::<LiveGit, LiveGpg>(&verify_commits_config(), "eb5e0185546b0bb1a13feec6b9ee8b39985fea42", "4a19ec7a1543fb83f63fbd6e8e0ca17ae6c986a3", "master");
     assert!(result.is_ok(), "Error: {:?}", result);
 }
 
