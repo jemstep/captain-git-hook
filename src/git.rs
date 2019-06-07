@@ -198,24 +198,29 @@ impl Git for LiveGit {
     fn find_commits(&self, from_id: Oid, to_id: Oid) -> Result<Vec<Commit<'_>>, Box<dyn Error>> {
         info!("Find commits between {} to {}", from_id, to_id);
 
-        let commits: Vec<_> = CommitIterator::range(&self.repo, from_id, to_id)
-            .collect();
+        let mut revwalk = self.repo.revwalk()?;
+        revwalk.push(to_id)?;
+        revwalk.hide(from_id)?;
+
+        let commits = revwalk.into_iter()
+           .map(|id| id.and_then(|id| self.repo.find_commit(id)))
+            .collect::<Result<Vec<_>, git2::Error>>()?;
+
         Ok(commits)
     }
 
     fn find_unpushed_commits(&self, new_commit_id: Oid) -> Result<Vec<Commit<'_>>, Box<dyn Error>> {
         info!("Get unpushed commits from {} ", new_commit_id);
 
-        let head = self.repo.head()?;
-        match head.target() {
-            Some(head_id) => {
-                let base = self.find_common_ancestor(head_id, new_commit_id)?;
-                Ok(CommitIterator::range(&self.repo, base, new_commit_id).collect())
-            },
-            None => {
-                Ok(CommitIterator::new(&self.repo, new_commit_id).collect())
-            }
-        }
+        let mut revwalk = self.repo.revwalk()?;
+        revwalk.push(new_commit_id)?;
+        revwalk.hide_head()?;
+        
+        let commits = revwalk.into_iter()
+           .map(|id| id.and_then(|id| self.repo.find_commit(id)))
+            .collect::<Result<Vec<_>, git2::Error>>()?;
+
+        Ok(commits)
     }
 
     fn verify_commit_signature(&self, commit: &Commit<'_>) -> Result<String, Box<dyn Error>> {
@@ -298,42 +303,4 @@ impl Git for LiveGit {
         }
     }
    
-}
-
-struct CommitIterator<'a> {
-    repo: &'a Repository,
-    to: Vec<Oid>,
-    from: Option<Oid>    
-}
-
-impl CommitIterator<'_>  {
-    fn new(repo: &Repository, to: Oid) -> CommitIterator<'_>  {
-        CommitIterator { repo : repo, from: None, to: vec!(to) }
-    }
-    
-    fn range(repo: &Repository, from: Oid, to: Oid) -> CommitIterator<'_>  {
-        let to_collection = if from == to {
-            Vec::new()
-        } else {
-            vec!(to)
-        };
-        CommitIterator { repo : repo, from: Some(from), to: to_collection  }
-    }
-}
-
-impl<'a> Iterator for CommitIterator<'a>  {
-    type Item = Commit<'a>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let next_id = self.to.pop();
-        let next_commit = next_id.and_then(|id| self.repo.find_commit(id).ok());
-
-        if let Some(commit) = &next_commit {
-            self.to.append(&mut commit.parent_ids()
-                           .filter(|id| Some(*id) != self.from)
-                           .collect());
-        };
-
-        next_commit
-    }
 }
