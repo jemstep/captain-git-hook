@@ -23,6 +23,8 @@ fn import_test_key() {
     let project_root = env!("CARGO_MANIFEST_DIR");
     let status = Command::new("gpg")
         .args(&["--import", &format!("{}/tests/test-public-key.asc", project_root)])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
         .status()
         .unwrap();
     assert!(status.success(), "Failed to import test GPG key");
