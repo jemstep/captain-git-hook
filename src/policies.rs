@@ -81,33 +81,32 @@ pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_v
 }
 
 fn commits_to_verify<'a, G: Git>(git: &'a G, old_commit_id: Oid, new_commit: Commit<'a>) -> Result<Vec<Commit<'a>>, Box<dyn Error>>  {
-    let mut commits = Vec::new();
     if G::is_new_branch(old_commit_id) {
         info!("{}", block("NEW BRANCH detected"));
-        commits = git.find_unpushed_commits(new_commit.id())?;
-    } else if G::merge_commit(&new_commit) {
-        info!("{}", block("MERGE detected"));
-        match new_commit.parents().nth(1) {
-            Some(second_parent) => {
-                commits.push(new_commit);
-                let common_ancestor_id = git.find_common_ancestor(old_commit_id, second_parent.id())?;
-                let mut commits2 = git.find_commits(common_ancestor_id, second_parent.id())?;
-                commits.append(&mut commits2);
-            },
-            None => return Err(Box::new(CapnError::new(format!("Second parent not found for merge commit {}", new_commit.id()))))
-        };
+        git.find_unpushed_commits(new_commit.id())
     } else {
-        commits = git.find_commits(old_commit_id, new_commit.id())?;
+        git.find_commits(old_commit_id, new_commit.id())
     }
-    Ok(commits)
 }
 
 
 fn verify_commit_signatures<G: Git>(git: &G, commits: &Vec<Commit<'_>>) -> Result<(), Box<dyn Error>> {
     info!("Verify commit signatures");
     for commit in commits.iter() {
-        if G::not_merge_commit(commit) {
-            let _fingerprint = git.verify_commit_signature(commit)?;
+        if G::is_identical_tree_to_any_parent(commit) {
+            debug!("{}: verified identical to one of its parents, no signature required", commit.id());
+        } else if git.is_trivial_merge_commit(commit) {
+            debug!("{}: verified to be a trivial merge of its parents, no signature required", commit.id());
+        } else {
+            match git.verify_commit_signature(commit) {
+                Ok(_) => {
+                    debug!("{}: verified with a valid signature", commit.id());
+                },
+                Err(err) => {
+                    debug!("{}: unverified, requies a valid signature", commit.id());
+                    return Err(err);
+                }
+            }
         }
     }
     Ok(())
@@ -133,21 +132,21 @@ fn verify_email_addresses(author_domain: &str,committer_domain: &str, commits: &
     for commit in commits.iter() {
         debug!("Verify author, committer email addresses for commit {}", commit.id());
         match commit.author().email(){
-            Some(s) => if s.contains(author_domain) == false {
-                    return Err(Box::new(CapnError::new(format!("Author {:?} : Commit {} : Email address {:?} incorrect.",
-                        commit.author().name(), commit.id(), commit.author().email()))))
-                },
+            Some(s) => if !s.ends_with(&format!("@{}", author_domain)) {
+                return Err(Box::new(CapnError::new(format!("Author {:?} : Commit {} : Email address {:?} incorrect.",
+                                                           commit.author().name(), commit.id(), commit.author().email()))))
+            },
             None => return Err(Box::new(CapnError::new(format!("Author {:?} : Commit {} : No email address.",
-                        commit.author().name(), commit.id()))))
+                                                               commit.author().name(), commit.id()))))
         }
 
         match commit.committer().email(){
-            Some(s) => if s.contains(committer_domain) == false {
-                     return Err(Box::new(CapnError::new(format!("Committer {:?} : Commit {} : Email address {:?} incorrect.",
-                        commit.committer().name(), commit.id(), commit.committer().email()))))
-                },
-              None => return Err(Box::new(CapnError::new(format!("Committer {:?} : Commit {} : No email address.",
-                        commit.committer().name(), commit.id()))))
+            Some(s) => if !s.ends_with(&format!("@{}", committer_domain)) {
+                return Err(Box::new(CapnError::new(format!("Committer {:?} : Commit {} : Email address {:?} incorrect.",
+                                                           commit.committer().name(), commit.id(), commit.committer().email()))))
+            },
+            None => return Err(Box::new(CapnError::new(format!("Committer {:?} : Commit {} : No email address.",
+                                                               commit.committer().name(), commit.id()))))
         }
     }
     Ok(())

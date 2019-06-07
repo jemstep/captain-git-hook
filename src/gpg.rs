@@ -42,6 +42,8 @@ impl Gpg for LiveGpg {
             .args(&["--keyserver",key_server])
             .arg("--recv-keys")
             .arg(fingerprint)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
             .status()?;
 
             if result.success() {
@@ -57,6 +59,8 @@ impl Gpg for LiveGpg {
             .args(&["--keyserver",key_server])
             .arg("--recv-keys")
             .args(fingerprints)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
             .status()?;
 
             if result.success() {

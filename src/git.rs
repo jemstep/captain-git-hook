@@ -29,6 +29,9 @@ pub trait Git: Sized {
     fn pushed(&self,commit_id: Oid) -> Result<bool, Box<dyn Error>>;
     fn not_merge_commit(commit: &Commit<'_>) -> bool;
     fn merge_commit(new_commit: &Commit<'_>) -> bool;
+    fn is_identical_tree_to_any_parent(commit: &Commit<'_>) -> bool;
+    fn is_trivial_merge_commit(&self, commit: &Commit<'_>) -> bool;
+    
     fn verify_commit_signature(&self,commit: &Commit<'_>) -> Result<String, Box<dyn Error>>;
     
     fn read_config(&self) -> Result<Config, Box<dyn Error>> {
@@ -195,22 +198,29 @@ impl Git for LiveGit {
     fn find_commits(&self, from_id: Oid, to_id: Oid) -> Result<Vec<Commit<'_>>, Box<dyn Error>> {
         info!("Find commits between {} to {}", from_id, to_id);
 
-        let commits: Vec<_> = CommitIterator::range(&self.repo, from_id, to_id)
-            .collect();
+        let mut revwalk = self.repo.revwalk()?;
+        revwalk.push(to_id)?;
+        revwalk.hide(from_id)?;
+        revwalk.hide_head()?;
+
+        let commits = revwalk.into_iter()
+            .map(|id| id.and_then(|id| self.repo.find_commit(id)))
+            .collect::<Result<Vec<_>, git2::Error>>()?;
+
         Ok(commits)
     }
 
     fn find_unpushed_commits(&self, new_commit_id: Oid) -> Result<Vec<Commit<'_>>, Box<dyn Error>> {
         info!("Get unpushed commits from {} ", new_commit_id);
 
-        let commits : Vec<_> = CommitIterator::new(&self.repo, new_commit_id)
-        .take_while(|c| {
-            match self.pushed(c.id()) {
-                Ok(p) => !p,
-                Err(_) => true
-            }
-        })
-        .collect();
+        let mut revwalk = self.repo.revwalk()?;
+        revwalk.push(new_commit_id)?;
+        revwalk.hide_head()?;
+        
+        let commits = revwalk.into_iter()
+            .map(|id| id.and_then(|id| self.repo.find_commit(id)))
+            .collect::<Result<Vec<_>, git2::Error>>()?;
+
         Ok(commits)
     }
 
@@ -251,29 +261,9 @@ impl Git for LiveGit {
 
     fn find_common_ancestor(&self, commit1_id: Oid, commit2_id: Oid) -> Result<Oid, Box<dyn Error>> {
         debug!("Find common ancestor for commits {} {}", commit1_id, commit2_id);
-        let repo_path = self.repo.path();
-        debug!("Repo path {:?}", repo_path);
-        let result = Command::new("git")
-            .current_dir(repo_path)
-            .arg("merge-base")
-            .arg(commit1_id.to_string())
-            .arg(commit2_id.to_string())
-            .output()?;
-        debug!("RESULT {:?}", result);
-        if !result.status.success() {
-            return Err(Box::new(CapnError::new(format!("Call to git merge base failed with status {}", result.status))));
-        }
-
-        let encoded = String::from_utf8(result.stdout)?;
-        let shas = encoded.split('\n')
-            .filter_map(|s| Some(String::from(s)))
-            .collect::<Vec<_>>();
-        let first_sha = shas.first();
-        debug!("Found valid common ancestor : {:?}", first_sha);
-        match first_sha {
-            Some(f) => return Ok(Oid::from_str(f)?),
-            None => return Err(Box::new(CapnError::new(format!("Common ancestors for commits {} {} not found", commit1_id, commit2_id))))
-        };
+        let base = self.repo.merge_base(commit1_id, commit2_id)?;
+        debug!("Found valid common ancestor : {:?}", base);
+        Ok(base)
              
     }
 
@@ -287,6 +277,26 @@ impl Git for LiveGit {
         return if parent_count > 1 { true } else { false };
     }
 
+    fn is_identical_tree_to_any_parent(commit: &Commit<'_>) -> bool {
+        let tree_id = commit.tree_id();
+        commit.parents().any(|p| p.tree_id() == tree_id)
+    }
+
+    fn is_trivial_merge_commit(&self, commit: &Commit<'_>) -> bool {
+        use git2::MergeOptions;
+
+        match &commit.parents().collect::<Vec<_>>()[..] {
+            [a, b] => {
+                let tree_id = commit.tree_id();
+                self.repo.merge_commits(&a, &b, Some(MergeOptions::new().fail_on_conflict(true)))
+                    .and_then(|mut index| index.write_tree_to(&self.repo))
+                    .map(|written_tree| written_tree == tree_id)
+                    .unwrap_or(false)
+            }
+            _ => false
+        }
+    }
+
     fn is_tag(&self, id: Oid) -> bool {
         match self.repo.find_tag(id) {
             Ok(_) => true,
@@ -294,42 +304,4 @@ impl Git for LiveGit {
         }
     }
    
-}
-
-struct CommitIterator<'a> {
-    repo: &'a Repository,
-    to: Vec<Oid>,
-    from: Option<Oid>    
-}
-
-impl CommitIterator<'_>  {
-    fn new(repo: &Repository, to: Oid) -> CommitIterator<'_>  {
-        CommitIterator { repo : repo, from: None, to: vec!(to) }
-    }
-    
-    fn range(repo: &Repository, from: Oid, to: Oid) -> CommitIterator<'_>  {
-        let to_collection = if from == to {
-            Vec::new()
-        } else {
-            vec!(to)
-        };
-        CommitIterator { repo : repo, from: Some(from), to: to_collection  }
-    }
-}
-
-impl<'a> Iterator for CommitIterator<'a>  {
-    type Item = Commit<'a>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let next_id = self.to.pop();
-        let next_commit = next_id.and_then(|id| self.repo.find_commit(id).ok());
-
-        if let Some(commit) = &next_commit {
-            self.to.append(&mut commit.parent_ids()
-                           .filter(|id| Some(*id) != self.from)
-                           .collect());
-        };
-
-        next_commit
-    }
 }
