@@ -118,10 +118,7 @@ fn verify_commit_signatures<G: Git>(git: &G, commits: &Vec<Commit<'_>>, fingerpr
 fn verify_different_authors<G: Git>(commits: &Vec<Commit<'_>>) -> Result<(), Box<dyn Error>> {
     info!("Verify multiple authors");
     let authors : HashSet<_> = commits.iter().filter_map(|c| {
-        match c.author().name() {
-            Some(n) => Some(n.to_string()),
-            _ => None
-        }
+        c.author().email().map(|e| e.to_string())
     }).collect();
     debug!("Author set: {:#?}", authors);
     if authors.len() <= 1 {
