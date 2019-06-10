@@ -4,12 +4,13 @@ use crate::fs::*;
 use crate::error::CapnError;
 use crate::config::VerifyGitCommitsConfig;
 use crate::pretty::*;
+use crate::fingerprints::*;
 
 use git2::{Commit, Oid};
 use std::error::Error;
 use std::path::PathBuf;
 use std::time::Instant;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use log::*;
 
 
@@ -43,15 +44,18 @@ pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_v
         for commit in &commits { G::debug_commit(&commit) };
         info!("{}", seperator(""));
 
+        let commit_fingerprints = git.find_commit_fingerprints(&config.team_fingerprints_file, &commits)?;
+        let fingerprint_ids = commit_fingerprints.values().map(|f| f.id.clone()).collect();
+
         if config.skip_recv_keys {
             info!("Skipping importing GPG keys");
         } else {
             info!("Find fingerprints for commits, and receive associated gpg keys");
-            let commit_fingerprints = git.find_commit_fingerprints(&config.team_fingerprints_file, &commits)?;
+            
             if config.recv_keys_par {
-                let _result = P::par_receive_keys(&config.keyserver,&commit_fingerprints)?;
+                let _result = P::par_receive_keys(&config.keyserver,&fingerprint_ids)?;
             } else {
-                let _result = P::receive_keys(&config.keyserver,&commit_fingerprints)?;
+                let _result = P::receive_keys(&config.keyserver,&fingerprint_ids)?;
             }
         }
         
@@ -62,7 +66,7 @@ pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_v
         }
        
         if config.verify_commit_signatures {
-            verify_commit_signatures::<G>(&git, &commits)?;
+            verify_commit_signatures::<G>(&git, &commits, &commit_fingerprints)?;
             info!("{}", seperator(""));
         }
         
@@ -77,7 +81,6 @@ pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_v
     info!("verify_git_commits COMPLETED in: {} ms", duration.as_millis());
 
     Ok(())
-    // return Err(Box::new(CapnError::new(format!("Error on verify git commits for testing"))));
 }
 
 fn commits_to_verify<'a, G: Git>(git: &'a G, old_commit_id: Oid, new_commit: Commit<'a>) -> Result<Vec<Commit<'a>>, Box<dyn Error>>  {
@@ -90,7 +93,7 @@ fn commits_to_verify<'a, G: Git>(git: &'a G, old_commit_id: Oid, new_commit: Com
 }
 
 
-fn verify_commit_signatures<G: Git>(git: &G, commits: &Vec<Commit<'_>>) -> Result<(), Box<dyn Error>> {
+fn verify_commit_signatures<G: Git>(git: &G, commits: &Vec<Commit<'_>>, fingerprints: &HashMap<String, Fingerprint>) -> Result<(), Box<dyn Error>> {
     info!("Verify commit signatures");
     for commit in commits.iter() {
         if G::is_identical_tree_to_any_parent(commit) {
@@ -98,7 +101,7 @@ fn verify_commit_signatures<G: Git>(git: &G, commits: &Vec<Commit<'_>>) -> Resul
         } else if git.is_trivial_merge_commit(commit) {
             debug!("{}: verified to be a trivial merge of its parents, no signature required", commit.id());
         } else {
-            match git.verify_commit_signature(commit) {
+            match git.verify_commit_signature(commit, fingerprints) {
                 Ok(_) => {
                     debug!("{}: verified with a valid signature", commit.id());
                 },

@@ -6,7 +6,7 @@ use std::error::Error;
 use std::process::*;
 use crate::error::CapnError;
 use std::str;
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 
 
 use crate::config::*;
@@ -24,7 +24,7 @@ pub trait Git: Sized {
     fn is_tag(&self, id: Oid) -> bool;
     fn find_unpushed_commits(&self, new_commit_id: Oid) -> Result<Vec<Commit<'_>>, Box<dyn Error>>;
     fn find_commit(&self,commit_id: Oid) -> Result<Commit<'_>, Box<dyn Error>>;
-    fn find_commit_fingerprints(&self, team_fingerprint_file: &str, commits: &Vec<Commit<'_>>) -> Result<HashSet<String>, Box<dyn Error>>;
+    fn find_commit_fingerprints(&self, team_fingerprint_file: &str, commits: &Vec<Commit<'_>>)  -> Result<HashMap<String, Fingerprint>, Box<dyn Error>>;
     fn find_common_ancestor(&self, commit1_id: Oid, commit2_id: Oid) -> Result<Oid, Box<dyn Error>>;
     fn pushed(&self,commit_id: Oid) -> Result<bool, Box<dyn Error>>;
     fn not_merge_commit(commit: &Commit<'_>) -> bool;
@@ -32,7 +32,7 @@ pub trait Git: Sized {
     fn is_identical_tree_to_any_parent(commit: &Commit<'_>) -> bool;
     fn is_trivial_merge_commit(&self, commit: &Commit<'_>) -> bool;
     
-    fn verify_commit_signature(&self,commit: &Commit<'_>) -> Result<String, Box<dyn Error>>;
+    fn verify_commit_signature(&self,commit: &Commit<'_>, fingerprints: &HashMap<String, Fingerprint>) -> Result<String, Box<dyn Error>>;
     
     fn read_config(&self) -> Result<Config, Box<dyn Error>> {
         let config_str = self.read_file(".capn")?;
@@ -150,26 +150,15 @@ impl Git for LiveGit {
         Ok(self.repo.find_commit(commit_id)?)
     }
 
-    fn find_commit_fingerprints(&self, team_fingerprint_file: &str, commits: &Vec<Commit<'_>>) -> Result<HashSet<String>, Box<dyn Error>> {
-        let team_fingerprints = Fingerprint::read_fingerprints::<LiveGit>(self, team_fingerprint_file)?;
+    fn find_commit_fingerprints(&self, team_fingerprint_file: &str, commits: &Vec<Commit<'_>>) -> Result<HashMap<String, Fingerprint>, Box<dyn Error>> {
+        let mut team_fingerprints = Fingerprint::read_fingerprints::<LiveGit>(self, team_fingerprint_file)?;
 
-        let mut commit_fingerprints = HashSet::new();
+        let commit_emails = commits.iter()
+            .filter_map(|c| c.committer().email().map(|email| email.to_string()))
+            .collect::<HashSet<String>>();
 
-        for commit in commits.iter() {
-            if Self::not_merge_commit(commit) {
-                let committer = commit.committer();
-                let commit_email = match committer.email() {
-                    Some(e) => e,
-                    None => return Err(Box::new(CapnError::new(format!("Email on commit {} not found", commit.id()))))
-                };
-                let fingerprint = team_fingerprints.get(commit_email);
-                match fingerprint {
-                    Some(f) => commit_fingerprints.insert(f.id.to_string()),
-                    None => return Err(Box::new(CapnError::new(format!("Team fingerprint not found for user {}", commit_email))))
-                };
-            }
-        }
-        Ok(commit_fingerprints)
+        team_fingerprints.retain(|email, _| commit_emails.contains(email));
+        Ok(team_fingerprints)
     }
 
     fn pushed(&self, commit_id: Oid) -> Result<bool, Box<dyn Error>> {
@@ -224,8 +213,18 @@ impl Git for LiveGit {
         Ok(commits)
     }
 
-    fn verify_commit_signature(&self, commit: &Commit<'_>) -> Result<String, Box<dyn Error>> {
+    fn verify_commit_signature(&self, commit: &Commit<'_>, fingerprints: &HashMap<String, Fingerprint>) -> Result<String, Box<dyn Error>> {
         let commit_id = commit.id();
+        let committer = commit.committer();
+        let committer_email = match committer.email() {
+            Some(email) => email,
+            None => return Err(Box::new(CapnError::new(format!("Commit {} does not have a valid committer: no email address", commit_id))))
+        };
+        let expected_fingerprint = match fingerprints.get(committer_email) {
+            Some(f) => f,
+            None => return Err(Box::new(CapnError::new(format!("Did not find GPG key for fingerprint for commit {}, committer {}", commit_id, committer_email))))
+        };
+            
         debug!("Verify signature for commit {}", commit_id);
         let repo_path = self.repo.path();
         let result = Command::new("git")
@@ -242,8 +241,10 @@ impl Git for LiveGit {
         }
 
         let encoded = String::from_utf8(result.stderr)?;
+
+        
         let fingerprints = encoded.split('\n')
-            .filter(|s| s.contains("VALIDSIG"))
+            .filter(|s| s.contains(&format!("VALIDSIG {}", expected_fingerprint.id)))
             .filter_map(|s| s.split(' ').nth(2).map(String::from))
             .collect::<Vec<_>>();
         let first = fingerprints.first();
