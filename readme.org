@@ -78,7 +78,37 @@ project's repo. This configuration file is in TOML format.
 
 This is an example ~.capn~ file: [[./.capn]]
 
+*** Policies
+**** Verify Git Commits
+This policy ensures that all commits come from a trusted source, using
+GPG keys. For this policy to work, Captain Git Hook must be installed
+as a ~pre-receive~ hook on your Git server.
 
+GPG public keys are fetched from a keyserver. They are checked against
+a "Team Fingerprints" file that must be checked into the repo.
+
+The Team Fingerprints file is a CSV file with the format GPG
+Fingerprint, Name, Email. For example:
+
+#+BEGIN_SRC csv
+3FFD FF12 60CC D40C B14F  67E2 9C1E 6C5B 630C 6EE1,Justin Wernick,justin@jemstep.com
+#+END_SRC
+
+#+BEGIN_SRC toml
+  [verify_git_commits]
+  verify_email_addresses = true # if true, ensure that committers and authors have the specified domain
+  author_domain = "yourdomain.com" # required domain for author email addresses
+  committer_domain = "yourdomain.com" # required domain for committer email addresses
+
+
+  verify_commit_signatures = true # if true, ensure that all code changes have a GPG signature
+  keyserver = "hkp://your.preferred.keyserver" # url to the keyserver to fetch public keys from
+  team_fingerprints_file = "gpg/TEAM_FINGERPRINTS" # path to the fingerprints file
+  recv_keys_par = true # run key requests to keyserver in parallel
+  skip_recv_keys = false # if true, do not fetch keys from the keyserver
+
+  verify_different_authors = true # if true, merge commits being pushed should have multiple authors in the branch
+#+END_SRC
 * Development
 
 ** Integration tests
