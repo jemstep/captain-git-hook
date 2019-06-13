@@ -12,22 +12,16 @@ use std::collections::{HashSet, HashMap};
 use crate::config::*;
 use log::*;
 
-const DONT_CARE_REF: &str = "0000000000000000000000000000000000000000";
-
 pub trait Git: Sized {
     fn new() -> Result<Self, Box<dyn Error>>;
     fn read_file(&self, path: &str) -> Result<String, Box<dyn Error>>;
     fn write_git_file(&self, path: &str, file_mode: u32, contents: &str) -> Result<(), Box<dyn Error>>;
     fn current_branch(&self) -> Result<String, Box<dyn Error>>;
-    fn log(&self) -> Result<(), Box<dyn Error>>;
     fn find_commits(&self,from_id: Oid,to_id: Oid) -> Result<Vec<Commit<'_>>, Box<dyn Error>>;
     fn is_tag(&self, id: Oid) -> bool;
     fn find_unpushed_commits(&self, new_commit_id: Oid) -> Result<Vec<Commit<'_>>, Box<dyn Error>>;
     fn find_commit(&self,commit_id: Oid) -> Result<Commit<'_>, Box<dyn Error>>;
     fn find_commit_fingerprints(&self, team_fingerprint_file: &str, commits: &Vec<Commit<'_>>)  -> Result<HashMap<String, Fingerprint>, Box<dyn Error>>;
-    fn find_common_ancestor(&self, commit1_id: Oid, commit2_id: Oid) -> Result<Oid, Box<dyn Error>>;
-    fn pushed(&self,commit_id: Oid) -> Result<bool, Box<dyn Error>>;
-    fn not_merge_commit(commit: &Commit<'_>) -> bool;
     fn merge_commit(new_commit: &Commit<'_>) -> bool;
     fn is_identical_tree_to_any_parent(commit: &Commit<'_>) -> bool;
     fn is_trivial_merge_commit(&self, commit: &Commit<'_>) -> bool;
@@ -59,20 +53,6 @@ pub trait Git: Sized {
         }
         debug!("");
     }
-
-    fn is_new_branch(from_id: Oid) -> bool {
-        return from_id == Self::dont_care_ref();
-    }
-
-    fn is_deleted_branch(to_id: Oid) -> bool {
-        return to_id == Self::dont_care_ref();
-    }
-
-    fn dont_care_ref() -> Oid {
-        return Oid::from_str(DONT_CARE_REF).unwrap();
-    }
-
-
 }
 
 pub struct LiveGit {
@@ -135,17 +115,6 @@ impl Git for LiveGit {
         }
     }
 
-    fn log(&self) -> Result<(), Box<dyn Error>> {
-        let mut revwalk = self.repo.revwalk()?;
-        revwalk.push_head()?;
-        for commit_id in revwalk {
-            let commit = self.repo.find_commit(commit_id?)?;
-            Self::debug_commit(&commit);
-        }
-
-        Ok(())
-    }
-
     fn find_commit(&self, commit_id: Oid) -> Result<Commit<'_>, Box<dyn Error>> {
         Ok(self.repo.find_commit(commit_id)?)
     }
@@ -159,29 +128,6 @@ impl Git for LiveGit {
 
         team_fingerprints.retain(|email, _| commit_emails.contains(email));
         Ok(team_fingerprints)
-    }
-
-    fn pushed(&self, commit_id: Oid) -> Result<bool, Box<dyn Error>> {
-        debug!("Check if commit {} has already been pushed", commit_id);
-
-        let repo_path = self.repo.path();
-        debug!("Repo path {:?}", repo_path);
-        let result = Command::new("git")
-            .current_dir(repo_path)
-            .arg("branch")
-            .arg("--contains")
-            .arg(commit_id.to_string())
-            .output()?;
-        debug!("RESULT {:?}", result);
-        if !result.status.success() {
-            return Err(Box::new(CapnError::new(format!("Call to git branch contains failed for commit {} with status {}", commit_id,result.status))));
-        }
-
-        let output = String::from_utf8(result.stdout)?;
-        match output.trim() {
-            "" => return Ok(false),
-            _ => return Ok(true)
-        };                
     }
 
     fn find_commits(&self, from_id: Oid, to_id: Oid) -> Result<Vec<Commit<'_>>, Box<dyn Error>> {
@@ -258,19 +204,6 @@ impl Git for LiveGit {
             }
         };
              
-    }
-
-    fn find_common_ancestor(&self, commit1_id: Oid, commit2_id: Oid) -> Result<Oid, Box<dyn Error>> {
-        debug!("Find common ancestor for commits {} {}", commit1_id, commit2_id);
-        let base = self.repo.merge_base(commit1_id, commit2_id)?;
-        debug!("Found valid common ancestor : {:?}", base);
-        Ok(base)
-             
-    }
-
-    fn not_merge_commit(commit: &Commit<'_>) -> bool {
-        let parent_count = commit.parent_count();
-        return if parent_count == 1 { true } else { false };
     }
 
     fn merge_commit(new_commit: &Commit<'_>) -> bool {

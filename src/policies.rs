@@ -30,15 +30,15 @@ pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_v
     let old_commit_id = Oid::from_str(old_value)?;
     let new_commit_id = Oid::from_str(new_value)?;
 
-    if G::is_deleted_branch(new_commit_id) {
+    if new_commit_id.is_zero() {
         info!("{}", block("DELETE BRANCH detected, no commits to verify."))
     } else if git.is_tag(new_commit_id) {
         info!("{}", block("TAG detected, no commits to verify."))
     } else {
         let new_commit = git.find_commit(new_commit_id)?;
-        let new_branch = G::is_new_branch(old_commit_id);
+        let new_branch = old_commit_id.is_zero();
         let merging = G::merge_commit(&new_commit) && !new_branch;
-        let commits = commits_to_verify(&git, old_commit_id, new_commit)?;
+        let commits = commits_to_verify(&git, old_commit_id, new_commit_id)?;
 
         info!("Number of commits to verify {} : ", commits.len());
         for commit in &commits { G::debug_commit(&commit) };
@@ -83,12 +83,12 @@ pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_v
     Ok(())
 }
 
-fn commits_to_verify<'a, G: Git>(git: &'a G, old_commit_id: Oid, new_commit: Commit<'a>) -> Result<Vec<Commit<'a>>, Box<dyn Error>>  {
-    if G::is_new_branch(old_commit_id) {
+fn commits_to_verify<'a, G: Git>(git: &'a G, old_commit_id: Oid, new_commit_id: Oid) -> Result<Vec<Commit<'a>>, Box<dyn Error>>  {
+    if old_commit_id.is_zero() {
         info!("{}", block("NEW BRANCH detected"));
-        git.find_unpushed_commits(new_commit.id())
+        git.find_unpushed_commits(new_commit_id)
     } else {
-        git.find_commits(old_commit_id, new_commit.id())
+        git.find_commits(old_commit_id, new_commit_id)
     }
 }
 
