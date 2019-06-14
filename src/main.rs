@@ -6,6 +6,7 @@ use capn::git::{LiveGit, Git};
 use capn::gpg::LiveGpg;
 use capn::fs::LiveFs;
 use capn::pretty::*;
+use capn::config::Config;
 use capn::*;
 
 use stderrlog;
@@ -47,30 +48,56 @@ enum Command {
     InstallHooks,
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
-
+// This function intentionally doesn't return 'error', it's meant to
+// nicely log any errors that happened further down and, if there are
+// errors, exit with a non-zero code.
+fn main() {
     let opt = Opt::from_args();
+
     stderrlog::new()
         .module(module_path!())
         .quiet(opt.quiet)
-        .verbosity(opt.verbose + 2) // Default is info
-        .init()?;
+        .verbosity(opt.verbose + 2) // Default is info (2)
+        .init()
+        .expect("ERROR: Logger was initialized twice");
     
     info!("{}", block("Ahoy, maties! Welcome to Capn Githook!"));
 
-    info!("Read configuration file");
-    let config = match LiveGit::new()?.read_config() {
+    let git = match LiveGit::new() {
+        Ok(g) => g,
+        Err(e) => {
+            error!("Capn Githook must be called in a Git repo. Error: {}", e);
+            exit(1);
+        }
+    };
+
+    let config = match git.read_config() {
         Ok(c) => c,
         Err(e) => {
-            error!("Failed to read the .capn config file: {}", e);
+            error!("Failed to read the .capn config file. Please check that you are in a Git repo that has a .capn config file in the root of the repo. Error: {}", e);
             exit(1);
         }
     };
 
     debug!("Configuration: {:#?}\n", config);
 
-    let result = match opt.command {
-        Command::PrepareCommitMsg(x) => prepare_commit_msg::<LiveFs, LiveGit>(x, config),
+    match execute_command(opt.command, config) {
+        Ok(()) => {
+            info!("{}", block("Aye, me hearties! Welcome aboard!"));
+        },
+        Err(e) => {
+            error!("{}", e);
+            exit(1);
+        }
+    }
+}
+
+fn execute_command(command: Command, config: Config) -> Result<(), Box<dyn Error>> {
+    match command {
+        Command::PrepareCommitMsg(x) => {
+            info!("Calling prepare-commit-msg");
+            prepare_commit_msg::<LiveFs, LiveGit>(x, config)
+        },
         Command::PrePush(x) => {
             for raw_line in stdin().lock().lines() {
                 let line = raw_line?;
@@ -104,7 +131,5 @@ fn main() -> Result<(), Box<dyn Error>> {
             Ok(())
         },
         Command::InstallHooks => install_hooks::<LiveGit>(),
-    };
-    info!("{}", block("Aye, me hearties! Welcome aboard!"));
-    result
+    }
 }
