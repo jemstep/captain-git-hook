@@ -1,7 +1,6 @@
 use crate::git::*;
 use crate::gpg::*;
 use crate::fs::*;
-//use crate::error::CapnError;
 use crate::config::VerifyGitCommitsConfig;
 use crate::pretty::*;
 use crate::fingerprints::*;
