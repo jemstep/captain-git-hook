@@ -4,7 +4,6 @@ use std::io::prelude::*;
 use crate::fingerprints::Fingerprint;
 use std::error::Error;
 use std::process::*;
-use crate::error::CapnError;
 use std::str;
 use std::collections::{HashSet, HashMap};
 
@@ -26,7 +25,7 @@ pub trait Git: Sized {
     fn is_identical_tree_to_any_parent(commit: &Commit<'_>) -> bool;
     fn is_trivial_merge_commit(&self, commit: &Commit<'_>) -> bool;
     
-    fn verify_commit_signature(&self,commit: &Commit<'_>, fingerprints: &HashMap<String, Fingerprint>) -> Result<String, Box<dyn Error>>;
+    fn verify_commit_signature(&self,commit: &Commit<'_>, fingerprints: &HashMap<String, Fingerprint>) -> Result<bool, Box<dyn Error>>;
     
     fn read_config(&self) -> Result<Config, Box<dyn Error>> {
         let config_str = self.read_file(".capn")?;
@@ -159,17 +158,22 @@ impl Git for LiveGit {
         Ok(commits)
     }
 
-    fn verify_commit_signature(&self, commit: &Commit<'_>, fingerprints: &HashMap<String, Fingerprint>) -> Result<String, Box<dyn Error>> {
-        // TODO: Unsigned vs error
+    fn verify_commit_signature(&self, commit: &Commit<'_>, fingerprints: &HashMap<String, Fingerprint>) -> Result<bool, Box<dyn Error>> {
         let commit_id = commit.id();
         let committer = commit.committer();
         let committer_email = match committer.email() {
             Some(email) => email,
-            None => return Err(Box::new(CapnError::new(format!("Commit {} does not have a valid committer: no email address", commit_id))))
+            None => {
+                error!("Commit {} does not have a valid committer: no email address", commit_id);
+                return Ok(false);
+            }
         };
         let expected_fingerprint = match fingerprints.get(committer_email) {
             Some(f) => f,
-            None => return Err(Box::new(CapnError::new(format!("Did not find GPG key for fingerprint for commit {}, committer {}", commit_id, committer_email))))
+            None => {
+                error!("Did not find GPG key for commit {}, committer {}", commit_id, committer_email);
+                return Ok(false);
+            }
         };
             
         debug!("Verify signature for commit {}", commit_id);
@@ -181,29 +185,18 @@ impl Git for LiveGit {
             .arg(commit_id.to_string())
             .output()?;
         debug!("RESULT {:?}", result);
-        if !result.status.success() {
-            let error_message = format!("Call to git verify failed for commit {} : status {} : author {:?} : committer {:?}",
-             commit_id, result.status, commit.author().name(), commit.committer().name());
-            return Err(Box::new(CapnError::new(error_message)));
-        }
 
         let encoded = String::from_utf8(result.stderr)?;
-
         
-        let fingerprints = encoded.split('\n')
-            .filter(|s| s.contains(&format!("VALIDSIG {}", expected_fingerprint.id)))
-            .filter_map(|s| s.split(' ').nth(2).map(String::from))
-            .collect::<Vec<_>>();
-        let first = fingerprints.first();
-        debug!("Found valid fingerprint from commit signature {:?}", first);
-        match first {
-            Some(f) => return Ok(f.to_string()),
-            None => {
-                let error_message = format!("Valid fingerprint for commit {} : author {:?} : committer {:?}",
-                 commit_id, commit.author().name(), commit.committer().name());
-                return Err(Box::new(CapnError::new(error_message)))
-            }
-        };
+        let valid = encoded.split('\n')
+            .any(|s| s.contains(&format!("VALIDSIG {}", expected_fingerprint.id)));
+
+        if valid {
+            Ok(true)
+        } else {
+            error!("Commit {} was not signed with a valid signature", commit_id);
+            Ok(false)
+        }
              
     }
 

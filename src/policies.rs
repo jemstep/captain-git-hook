@@ -114,7 +114,7 @@ pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_v
         }
        
         if config.verify_commit_signatures {
-            policy_result = policy_result.and(verify_commit_signatures::<G>(&git, &commits, &commit_fingerprints));
+            policy_result = policy_result.and(verify_commit_signatures::<G>(&git, &commits, &commit_fingerprints)?);
             info!("{}", seperator(""));
         }
         
@@ -141,30 +141,32 @@ fn commits_to_verify<'a, G: Git>(git: &'a G, old_commit_id: Oid, new_commit_id: 
 }
 
 
-fn verify_commit_signatures<G: Git>(git: &G, commits: &Vec<Commit<'_>>, fingerprints: &HashMap<String, Fingerprint>) -> PolicyResult {
+fn verify_commit_signatures<G: Git>(git: &G, commits: &Vec<Commit<'_>>, fingerprints: &HashMap<String, Fingerprint>) -> Result<PolicyResult, Box<dyn Error>> {
     info!("Verify commit signatures");
     commits.iter()
         .map(|commit| {
             if G::is_identical_tree_to_any_parent(commit) {
                 debug!("{}: verified identical to one of its parents, no signature required", commit.id());
-                PolicyResult::Ok
+                Ok(PolicyResult::Ok)
             } else if git.is_trivial_merge_commit(commit) {
                 debug!("{}: verified to be a trivial merge of its parents, no signature required", commit.id());
-                PolicyResult::Ok
+                Ok(PolicyResult::Ok)
             } else {
                 match git.verify_commit_signature(commit, fingerprints) {
-                    Ok(_) => {
+                    Ok(true) => {
                         debug!("{}: verified with a valid signature", commit.id());
-                        PolicyResult::Ok
+                        Ok(PolicyResult::Ok)
                     },
-                    Err(_err) => {
+                    Ok(false) => {
                         debug!("{}: unverified, requies a valid signature", commit.id());
-                        PolicyResult::UnsignedCommit(commit.id())
-                    }
+                        Ok(PolicyResult::UnsignedCommit(commit.id()))
+                    },
+                    Err(e) => Err(e)
                 }
             }
         })
-        .fold(PolicyResult::Ok, |acc, x| acc.and(x))
+        .collect::<Result<Vec<PolicyResult>, Box<dyn Error>>>()
+        .map(|xs| xs.into_iter().fold(PolicyResult::Ok, |acc, x| acc.and(x)))
 }
 
 fn verify_different_authors<G: Git>(commits: &Vec<Commit<'_>>, id: Oid) -> PolicyResult {
