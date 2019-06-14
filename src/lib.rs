@@ -46,19 +46,16 @@ pub struct PrePush {
     pub remote_location: String,
 }
 
-
-pub fn prepare_commit_msg<F: Fs, G: Git>(opt: PrepareCommitMsg, config: Config) -> Result<(), Box<dyn Error>> {
+pub fn prepare_commit_msg<F: Fs, G: Git>(opt: PrepareCommitMsg, config: Config) -> Result<PolicyResult, Box<dyn Error>> {
     if opt.commit_source.is_none() {
-        if let Some(_) = config.prepend_branch_name {
-            prepend_branch_name::<F, G>(opt.commit_file)?;
-        }
-
-        Ok(())
+        compose(vec![
+            config.prepend_branch_name.map(|_| prepend_branch_name::<F, G>(opt.commit_file))
+        ])
     } else {
         // do nothing silently. This comes up on merge commits,
         // ammendment commits, if a message was specified on the
         // cli.
-        Ok(())
+        Ok(PolicyResult::Ok)
     }
 }
 
@@ -85,4 +82,11 @@ capn prepare-commit-msg "$@"
 capn pre-push "$@"
 "#)?;
     Ok(())
+}
+
+
+fn compose(results: Vec<Option<Result<PolicyResult, Box<dyn Error>>>>) -> Result<PolicyResult, Box<dyn Error>> {
+    results.into_iter()
+        .filter_map(|x| x)
+        .fold(Ok(PolicyResult::Ok), |acc, next| acc.and_then(|a| next.map(|b| a.and(b))))
 }

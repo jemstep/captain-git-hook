@@ -13,14 +13,30 @@ use std::time::Instant;
 use std::collections::{HashMap, HashSet};
 use log::*;
 
+#[derive(Debug, Clone)]
+pub enum PolicyResult {
+    Ok,
+    UnsignedCommit(Oid),
+    NotEnoughAuthors(HashSet<String>),
+    InvalidEmail(String)
+}
 
+impl PolicyResult {
+    pub fn and(self, res: PolicyResult) -> PolicyResult {
+        match self {
+            PolicyResult::Ok => res,
+            x => x
+        }
+    }
+}
 
-pub fn prepend_branch_name<F: Fs, G: Git>(commit_file: PathBuf) -> Result<(), Box<dyn Error>> {
+pub fn prepend_branch_name<F: Fs, G: Git>(commit_file: PathBuf) -> Result<PolicyResult, Box<dyn Error>> {
     debug!("Executing policy: prepend_branch_name");
     
     let git = G::new()?;
     let branch = git.current_branch()?;
-    Ok(F::prepend_string_to_file(branch, commit_file)?)
+    F::prepend_string_to_file(branch, commit_file)?;
+    Ok(PolicyResult::Ok)
 }
 
 pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_value: &str, new_value: &str) -> Result<(), Box<dyn Error>> {

@@ -8,6 +8,7 @@ use capn::fs::LiveFs;
 use capn::pretty::*;
 use capn::config::Config;
 use capn::*;
+use capn::policies::PolicyResult;
 
 use stderrlog;
 use log::*;
@@ -96,7 +97,15 @@ fn execute_command(command: Command, config: Config) -> Result<(), Box<dyn Error
     match command {
         Command::PrepareCommitMsg(x) => {
             info!("Calling prepare-commit-msg");
-            prepare_commit_msg::<LiveFs, LiveGit>(x, config)
+            prepare_commit_msg::<LiveFs, LiveGit>(x, config).map(|x| {
+                match x {
+                    PolicyResult::Ok => {
+                    },
+                    _e => {
+                    }
+                };
+                ()
+            })
         },
         Command::PrePush(x) => {
             for raw_line in stdin().lock().lines() {
