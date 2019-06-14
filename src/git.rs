@@ -160,6 +160,7 @@ impl Git for LiveGit {
     }
 
     fn verify_commit_signature(&self, commit: &Commit<'_>, fingerprints: &HashMap<String, Fingerprint>) -> Result<String, Box<dyn Error>> {
+        // TODO: Unsigned vs error
         let commit_id = commit.id();
         let committer = commit.committer();
         let committer_email = match committer.email() {
