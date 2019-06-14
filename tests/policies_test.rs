@@ -49,7 +49,7 @@ fn verify_git_commits_happy_path_from_empty() {
     init_logging();
     set_current_dir_to_test_repo();
     import_test_key();
-    let result = policies::verify_git_commits::<LiveGit, LiveGpg>(&verify_commits_config(), "0000000000000000000000000000000000000000", "7f9763e189ade34345e683ab7e0c22d164280452", "master");
+    let result = policies::verify_git_commits::<LiveGit, LiveGpg>(&verify_commits_config(), "0000000000000000000000000000000000000000", "7f9763e189ade34345e683ab7e0c22d164280452");
     assert!(result.is_ok(), "Error: {:?}", result);
 }
 
@@ -58,7 +58,7 @@ fn verify_git_commits_happy_path_from_existing() {
     init_logging();
     set_current_dir_to_test_repo();
     import_test_key();
-    let result = policies::verify_git_commits::<LiveGit, LiveGpg>(&verify_commits_config(), "7f9763e189ade34345e683ab7e0c22d164280452", "eb5e0185546b0bb1a13feec6b9ee8b39985fea42", "master");
+    let result = policies::verify_git_commits::<LiveGit, LiveGpg>(&verify_commits_config(), "7f9763e189ade34345e683ab7e0c22d164280452", "eb5e0185546b0bb1a13feec6b9ee8b39985fea42");
     assert!(result.is_ok(), "Error: {:?}", result);
 }
 
@@ -67,7 +67,7 @@ fn verify_git_commits_happy_path_unsigned_trivial_no_fast_forward_merge() {
     init_logging();
     set_current_dir_to_test_repo();
     import_test_key();
-    let result = policies::verify_git_commits::<LiveGit, LiveGpg>(&verify_commits_config(), "eb5e0185546b0bb1a13feec6b9ee8b39985fea42", "3eb315d10e2ad89555d7bfc78a1db1ce07bce434", "master");
+    let result = policies::verify_git_commits::<LiveGit, LiveGpg>(&verify_commits_config(), "eb5e0185546b0bb1a13feec6b9ee8b39985fea42", "3eb315d10e2ad89555d7bfc78a1db1ce07bce434");
     assert!(result.is_ok(), "Error: {:?}", result);
 }
 
@@ -76,7 +76,7 @@ fn verify_git_commits_happy_path_unsigned_trivial_merge() {
     init_logging();
     set_current_dir_to_test_repo();
     import_test_key();
-    let result = policies::verify_git_commits::<LiveGit, LiveGpg>(&verify_commits_config(), "eb5e0185546b0bb1a13feec6b9ee8b39985fea42", "6754e4ec9b2dec567190d5a7f0be18b1a23d632a", "master");
+    let result = policies::verify_git_commits::<LiveGit, LiveGpg>(&verify_commits_config(), "eb5e0185546b0bb1a13feec6b9ee8b39985fea42", "6754e4ec9b2dec567190d5a7f0be18b1a23d632a");
     assert!(result.is_ok(), "Error: {:?}", result);
 }
 
@@ -85,7 +85,7 @@ fn verify_git_commits_single_unsigned_commit() {
     init_logging();
     set_current_dir_to_test_repo();
     import_test_key();
-    let result = policies::verify_git_commits::<LiveGit, LiveGpg>(&verify_commits_config(), "eb5e0185546b0bb1a13feec6b9ee8b39985fea42", "d2e3bfdc923986d04e7a6368b5fdd78b1ddf84f1", "master");
+    let result = policies::verify_git_commits::<LiveGit, LiveGpg>(&verify_commits_config(), "eb5e0185546b0bb1a13feec6b9ee8b39985fea42", "d2e3bfdc923986d04e7a6368b5fdd78b1ddf84f1");
     assert!(result.is_err());
 }
 
@@ -94,7 +94,7 @@ fn verify_git_commits_single_unsigned_commit_new_branch() {
     init_logging();
     set_current_dir_to_test_repo();
     import_test_key();
-    let result = policies::verify_git_commits::<LiveGit, LiveGpg>(&verify_commits_config(), "0000000000000000000000000000000000000000", "d2e3bfdc923986d04e7a6368b5fdd78b1ddf84f1", "unsigned");
+    let result = policies::verify_git_commits::<LiveGit, LiveGpg>(&verify_commits_config(), "0000000000000000000000000000000000000000", "d2e3bfdc923986d04e7a6368b5fdd78b1ddf84f1");
     assert!(result.is_err());
 }
 
@@ -103,7 +103,7 @@ fn verify_git_commits_unsigned_commit_being_merged_in() {
     init_logging();
     set_current_dir_to_test_repo();
     import_test_key();
-    let result = policies::verify_git_commits::<LiveGit, LiveGpg>(&verify_commits_config(), "eb5e0185546b0bb1a13feec6b9ee8b39985fea42", "ef1710ba8bd1f5ed0eec7883af30fca732d39afd", "master");
+    let result = policies::verify_git_commits::<LiveGit, LiveGpg>(&verify_commits_config(), "eb5e0185546b0bb1a13feec6b9ee8b39985fea42", "ef1710ba8bd1f5ed0eec7883af30fca732d39afd");
     assert!(result.is_err());
 }
 
@@ -112,7 +112,7 @@ fn verify_git_commits_unsigned_commit_behind_a_merge_commit() {
     init_logging();
     set_current_dir_to_test_repo();
     import_test_key();
-    let result = policies::verify_git_commits::<LiveGit, LiveGpg>(&verify_commits_config(), "eb5e0185546b0bb1a13feec6b9ee8b39985fea42", "e9752e78505f3c9bcec15d4bef4299caf0538388", "master");
+    let result = policies::verify_git_commits::<LiveGit, LiveGpg>(&verify_commits_config(), "eb5e0185546b0bb1a13feec6b9ee8b39985fea42", "e9752e78505f3c9bcec15d4bef4299caf0538388");
     assert!(result.is_err());
 }
 
@@ -121,7 +121,7 @@ fn verify_git_commits_invalid_author() {
     init_logging();
     set_current_dir_to_test_repo();
     import_test_key();
-    let result = policies::verify_git_commits::<LiveGit, LiveGpg>(&verify_commits_config(), "eb5e0185546b0bb1a13feec6b9ee8b39985fea42", "afe2141ef20abd098927adc66d6728821cb34f59", "master");
+    let result = policies::verify_git_commits::<LiveGit, LiveGpg>(&verify_commits_config(), "eb5e0185546b0bb1a13feec6b9ee8b39985fea42", "afe2141ef20abd098927adc66d6728821cb34f59");
     assert!(result.is_err());
 }
 
@@ -130,6 +130,6 @@ fn verify_git_commits_code_injected_into_unsigned_merge() {
     init_logging();
     set_current_dir_to_test_repo();
     import_test_key();
-    let result = policies::verify_git_commits::<LiveGit, LiveGpg>(&verify_commits_config(), "eb5e0185546b0bb1a13feec6b9ee8b39985fea42", "eef93e7f977c125f92fc78116fc9b881e4055ae8", "master");
+    let result = policies::verify_git_commits::<LiveGit, LiveGpg>(&verify_commits_config(), "eb5e0185546b0bb1a13feec6b9ee8b39985fea42", "eef93e7f977c125f92fc78116fc9b881e4055ae8");
     assert!(result.is_err());
 }

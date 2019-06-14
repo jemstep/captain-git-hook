@@ -23,7 +23,7 @@ pub fn prepend_branch_name<F: Fs, G: Git>(commit_file: PathBuf) -> Result<(), Bo
     Ok(F::prepend_string_to_file(branch, commit_file)?)
 }
 
-pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_value: &str, new_value: &str,_ref_name: &str) -> Result<(), Box<dyn Error>> {
+pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_value: &str, new_value: &str) -> Result<(), Box<dyn Error>> {
     info!("{}", seperator("verify_git_commits STARTED"));
     let git = G::new()?;
     let start = Instant::now();
@@ -85,7 +85,7 @@ pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_v
 
 fn commits_to_verify<'a, G: Git>(git: &'a G, old_commit_id: Oid, new_commit_id: Oid) -> Result<Vec<Commit<'a>>, Box<dyn Error>>  {
     if old_commit_id.is_zero() {
-        info!("{}", block("NEW BRANCH detected"));
+        debug!("{}", block("NEW BRANCH detected"));
         git.find_unpushed_commits(new_commit_id)
     } else {
         git.find_commits(old_commit_id, new_commit_id)
