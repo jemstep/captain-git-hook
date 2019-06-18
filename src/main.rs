@@ -67,7 +67,7 @@ fn main() {
     let git = match LiveGit::new() {
         Ok(g) => g,
         Err(e) => {
-            error!("Capn Githook must be called in a Git repo. Error: {}", e);
+            error!("Failed to initialize Capn Githook. Error: {}\nPlease check that you are in a Git repo.", e);
             exit(1);
         }
     };
@@ -75,7 +75,7 @@ fn main() {
     let config = match git.read_config() {
         Ok(c) => c,
         Err(e) => {
-            error!("Failed to read the .capn config file. Please check that you are in a Git repo that has a .capn config file in the root of the repo. Error: {}", e);
+            error!("Failed to read the .capn config file.  Error: {}.\nPlease check that you are in a Git repo that has a .capn config file in the root of the repo.", e);
             exit(1);
         }
     };
