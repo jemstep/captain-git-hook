@@ -11,6 +11,7 @@ use std::path::PathBuf;
 use std::time::Instant;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
+use std::iter;
 
 use log::*;
 
@@ -56,6 +57,14 @@ impl fmt::Display for PolicyResult {
             InvalidCommitterEmail(id, email) => write!(f, "Commit has an invalid committer email ({}): {}", email, id),
             MissingCommitterEmail(id) => write!(f, "Commit does not have a committer email: {}", id),
         }
+    }
+}
+
+impl iter::FromIterator<PolicyResult> for PolicyResult {
+    fn from_iter<I: IntoIterator<Item=PolicyResult>>(iter: I) -> Self {
+        iter.into_iter()
+            .find(PolicyResult::is_err)
+            .unwrap_or(PolicyResult::Ok)
     }
 }
 

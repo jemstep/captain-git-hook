@@ -1,5 +1,7 @@
-use capn::config::VerifyGitCommitsConfig;
+use capn::config::{Config, VerifyGitCommitsConfig};
 use capn::policies;
+use capn;
+
 use capn::git::LiveGit;
 use capn::gpg::LiveGpg;
 
@@ -42,6 +44,19 @@ fn verify_commits_config() -> VerifyGitCommitsConfig {
         verify_commit_signatures: true,
         verify_different_authors: true
     }
+}
+
+#[test]
+fn verify_git_commits_happy_path_from_empty_through_pre_receive() {
+    init_logging();
+    set_current_dir_to_test_repo();
+    import_test_key();
+    let config = Config {
+        prepend_branch_name: None,
+        verify_git_commits: Some(verify_commits_config())
+    };
+    let result = capn::pre_receive::<LiveGit, LiveGpg>(&config, "0000000000000000000000000000000000000000", "7f9763e189ade34345e683ab7e0c22d164280452", "master").unwrap();
+    assert!(result.is_ok(), "Error: {:?}", result);
 }
 
 #[test]

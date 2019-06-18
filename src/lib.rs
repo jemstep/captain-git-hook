@@ -48,9 +48,9 @@ pub struct PrePush {
 
 pub fn prepare_commit_msg<F: Fs, G: Git>(opt: PrepareCommitMsg, config: Config) -> Result<PolicyResult, Box<dyn Error>> {
     if opt.commit_source.is_none() {
-        compose(vec![
+        vec![
             config.prepend_branch_name.map(|_| prepend_branch_name::<F, G>(opt.commit_file))
-        ])
+        ].into_iter().flatten().collect()
     } else {
         // do nothing silently. This comes up on merge commits,
         // ammendment commits, if a message was specified on the
@@ -60,15 +60,15 @@ pub fn prepare_commit_msg<F: Fs, G: Git>(opt: PrepareCommitMsg, config: Config) 
 }
 
 pub fn pre_push<G: Git, P: Gpg>(_opt: &PrePush, config: &Config, _local_ref: &str, local_sha: &str, _remote_ref: &str, remote_sha: &str) -> Result<PolicyResult, Box<dyn Error>> {
-    compose(vec![
+    vec![
         config.verify_git_commits.as_ref().map(|c| verify_git_commits::<G, P>(c, remote_sha, local_sha))
-    ])
+    ].into_iter().flatten().collect()
 }
 
 pub fn pre_receive<G: Git, P: Gpg>(config: &Config, old_value: &str, new_value: &str, _ref_name: &str) -> Result<PolicyResult, Box<dyn Error>> {
-    compose(vec![
+    vec![
         config.verify_git_commits.as_ref().map(|c| verify_git_commits::<G, P>(c, old_value, new_value))
-    ])
+    ].into_iter().flatten().collect()
 }
 
 pub fn install_hooks<G: Git>() -> Result<(), Box<dyn Error>> {
@@ -80,11 +80,4 @@ capn prepare-commit-msg "$@"
 capn pre-push "$@"
 "#)?;
     Ok(())
-}
-
-
-fn compose(results: Vec<Option<Result<PolicyResult, Box<dyn Error>>>>) -> Result<PolicyResult, Box<dyn Error>> {
-    results.into_iter()
-        .filter_map(|x| x)
-        .fold(Ok(PolicyResult::Ok), |acc, next| acc.and_then(|a| next.map(|b| a.and(b))))
 }

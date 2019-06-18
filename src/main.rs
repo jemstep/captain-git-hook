@@ -99,11 +99,11 @@ fn main() {
 
 fn execute_command(command: Command, config: Config) -> Result<PolicyResult, Box<dyn Error>> {
     match command {
-        Command::PrepareCommitMsg(x) => {
+        Command::PrepareCommitMsg(args) => {
             info!("Calling prepare-commit-msg");
-            prepare_commit_msg::<LiveFs, LiveGit>(x, config)
+            prepare_commit_msg::<LiveFs, LiveGit>(args, config)
         },
-        Command::PrePush(x) => {
+        Command::PrePush(args) => {
             let mut result = PolicyResult::Ok;
             
             for raw_line in stdin().lock().lines() {
@@ -112,7 +112,7 @@ fn execute_command(command: Command, config: Config) -> Result<PolicyResult, Box
                 match (fields.next(), fields.next(), fields.next(), fields.next()) {
                     (Some(local_ref), Some(local_sha), Some(remote_ref), Some(remote_sha)) => {
                         info!("Calling prepush with: {} {} {} {}", local_ref, local_sha, remote_ref, remote_sha);
-                        result = result.and(pre_push::<LiveGit, LiveGpg>(&x, &config, local_ref, local_sha, remote_ref, remote_sha)?);
+                        result = result.and(pre_push::<LiveGit, LiveGpg>(&args, &config, local_ref, local_sha, remote_ref, remote_sha)?);
                     },
                     _ => {
                         warn!("Expected parameters not received on stdin. Line received was: {}", line);
