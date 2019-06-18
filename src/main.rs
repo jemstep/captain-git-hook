@@ -104,41 +104,40 @@ fn execute_command(command: Command, config: Config) -> Result<PolicyResult, Box
             prepare_commit_msg::<LiveFs, LiveGit>(args, config)
         },
         Command::PrePush(args) => {
-            let mut result = PolicyResult::Ok;
-            
-            for raw_line in stdin().lock().lines() {
-                let line = raw_line?;
-                let mut fields = line.split(' ');
-                match (fields.next(), fields.next(), fields.next(), fields.next()) {
-                    (Some(local_ref), Some(local_sha), Some(remote_ref), Some(remote_sha)) => {
-                        info!("Calling prepush with: {} {} {} {}", local_ref, local_sha, remote_ref, remote_sha);
-                        result = result.and(pre_push::<LiveGit, LiveGpg>(&args, &config, local_ref, local_sha, remote_ref, remote_sha)?);
-                    },
-                    _ => {
-                        warn!("Expected parameters not received on stdin. Line received was: {}", line);
+            stdin().lock().lines()
+                .map(|raw_line| raw_line.map(|line| {
+                    let mut fields = line.split(' ');
+                    match (fields.next(), fields.next(), fields.next(), fields.next()) {
+                        (Some(local_ref), Some(local_sha), Some(remote_ref), Some(remote_sha)) => {
+                            info!("Calling prepush with: {} {} {} {}", local_ref, local_sha, remote_ref, remote_sha);
+                            pre_push::<LiveGit, LiveGpg>(&args, &config, local_ref, local_sha, remote_ref, remote_sha)
+                        },
+                        _ => {
+                            warn!("Expected parameters not received on stdin. Line received was: {}", line);
+                            Ok(PolicyResult::Ok)
+                        }
                     }
-                };
-            }
-            
-            Ok(result)
+                }))
+                .flatten()
+                .collect()
         },
         Command::PreReceive => {
-            let mut result = PolicyResult::Ok;
-            
-            for raw_line in stdin().lock().lines() {
-                let line = raw_line?;
-                let mut fields = line.split(' ');
-                match (fields.next(), fields.next(), fields.next()) {
-                    (Some(old_value), Some(new_value), Some(ref_name)) => {
-                        info!("Calling prereceive with: {} {} {}", old_value, new_value, ref_name);
-                        result = result.and(pre_receive::<LiveGit, LiveGpg>(&config, old_value, new_value, ref_name)?);
-                    },
-                    _ => {
-                        warn!("Expected parameters not received on stdin. Line received was: {}", line);
+            stdin().lock().lines()
+                .map(|raw_line| raw_line.map(|line| {
+                    let mut fields = line.split(' ');
+                    match (fields.next(), fields.next(), fields.next()) {
+                        (Some(old_value), Some(new_value), Some(ref_name)) => {
+                            info!("Calling prereceive with: {} {} {}", old_value, new_value, ref_name);
+                            pre_receive::<LiveGit, LiveGpg>(&config, old_value, new_value, ref_name)
+                        },
+                        _ => {
+                            warn!("Expected parameters not received on stdin. Line received was: {}", line);
+                            Ok(PolicyResult::Ok)
+                        }
                     }
-                };
-            }
-            Ok(result)
+                }))
+                .flatten()
+                .collect()
         },
         Command::InstallHooks => {
             install_hooks::<LiveGit>()

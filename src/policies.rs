@@ -173,8 +173,7 @@ fn verify_commit_signatures<G: Git>(git: &G, commits: &Vec<Commit<'_>>, fingerpr
                 }
             }
         })
-        .collect::<Result<Vec<PolicyResult>, Box<dyn Error>>>()
-        .map(|xs| xs.into_iter().fold(PolicyResult::Ok, |acc, x| acc.and(x)))
+        .collect()
 }
 
 fn verify_different_authors<G: Git>(commits: &Vec<Commit<'_>>, id: Oid) -> PolicyResult {
@@ -203,6 +202,6 @@ fn verify_email_addresses(author_domain: &str,committer_domain: &str, commits: &
                 _ => PolicyResult::Ok
             }
         })
-        .fold(PolicyResult::Ok, |acc, x| acc.and(x))
+        .collect()
 }
 
