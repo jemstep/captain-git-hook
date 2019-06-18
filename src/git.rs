@@ -4,7 +4,6 @@ use std::io::prelude::*;
 use crate::fingerprints::Fingerprint;
 use std::error::Error;
 use std::process::*;
-use crate::error::CapnError;
 use std::str;
 use std::collections::{HashSet, HashMap};
 
@@ -12,27 +11,21 @@ use std::collections::{HashSet, HashMap};
 use crate::config::*;
 use log::*;
 
-const DONT_CARE_REF: &str = "0000000000000000000000000000000000000000";
-
 pub trait Git: Sized {
     fn new() -> Result<Self, Box<dyn Error>>;
     fn read_file(&self, path: &str) -> Result<String, Box<dyn Error>>;
     fn write_git_file(&self, path: &str, file_mode: u32, contents: &str) -> Result<(), Box<dyn Error>>;
     fn current_branch(&self) -> Result<String, Box<dyn Error>>;
-    fn log(&self) -> Result<(), Box<dyn Error>>;
     fn find_commits(&self,from_id: Oid,to_id: Oid) -> Result<Vec<Commit<'_>>, Box<dyn Error>>;
     fn is_tag(&self, id: Oid) -> bool;
     fn find_unpushed_commits(&self, new_commit_id: Oid) -> Result<Vec<Commit<'_>>, Box<dyn Error>>;
     fn find_commit(&self,commit_id: Oid) -> Result<Commit<'_>, Box<dyn Error>>;
     fn find_commit_fingerprints(&self, team_fingerprint_file: &str, commits: &Vec<Commit<'_>>)  -> Result<HashMap<String, Fingerprint>, Box<dyn Error>>;
-    fn find_common_ancestor(&self, commit1_id: Oid, commit2_id: Oid) -> Result<Oid, Box<dyn Error>>;
-    fn pushed(&self,commit_id: Oid) -> Result<bool, Box<dyn Error>>;
-    fn not_merge_commit(commit: &Commit<'_>) -> bool;
     fn merge_commit(new_commit: &Commit<'_>) -> bool;
     fn is_identical_tree_to_any_parent(commit: &Commit<'_>) -> bool;
     fn is_trivial_merge_commit(&self, commit: &Commit<'_>) -> bool;
     
-    fn verify_commit_signature(&self,commit: &Commit<'_>, fingerprints: &HashMap<String, Fingerprint>) -> Result<String, Box<dyn Error>>;
+    fn verify_commit_signature(&self,commit: &Commit<'_>, fingerprints: &HashMap<String, Fingerprint>) -> Result<bool, Box<dyn Error>>;
     
     fn read_config(&self) -> Result<Config, Box<dyn Error>> {
         let config_str = self.read_file(".capn")?;
@@ -59,20 +52,6 @@ pub trait Git: Sized {
         }
         debug!("");
     }
-
-    fn is_new_branch(from_id: Oid) -> bool {
-        return from_id == Self::dont_care_ref();
-    }
-
-    fn is_deleted_branch(to_id: Oid) -> bool {
-        return to_id == Self::dont_care_ref();
-    }
-
-    fn dont_care_ref() -> Oid {
-        return Oid::from_str(DONT_CARE_REF).unwrap();
-    }
-
-
 }
 
 pub struct LiveGit {
@@ -135,17 +114,6 @@ impl Git for LiveGit {
         }
     }
 
-    fn log(&self) -> Result<(), Box<dyn Error>> {
-        let mut revwalk = self.repo.revwalk()?;
-        revwalk.push_head()?;
-        for commit_id in revwalk {
-            let commit = self.repo.find_commit(commit_id?)?;
-            Self::debug_commit(&commit);
-        }
-
-        Ok(())
-    }
-
     fn find_commit(&self, commit_id: Oid) -> Result<Commit<'_>, Box<dyn Error>> {
         Ok(self.repo.find_commit(commit_id)?)
     }
@@ -159,29 +127,6 @@ impl Git for LiveGit {
 
         team_fingerprints.retain(|email, _| commit_emails.contains(email));
         Ok(team_fingerprints)
-    }
-
-    fn pushed(&self, commit_id: Oid) -> Result<bool, Box<dyn Error>> {
-        debug!("Check if commit {} has already been pushed", commit_id);
-
-        let repo_path = self.repo.path();
-        debug!("Repo path {:?}", repo_path);
-        let result = Command::new("git")
-            .current_dir(repo_path)
-            .arg("branch")
-            .arg("--contains")
-            .arg(commit_id.to_string())
-            .output()?;
-        debug!("RESULT {:?}", result);
-        if !result.status.success() {
-            return Err(Box::new(CapnError::new(format!("Call to git branch contains failed for commit {} with status {}", commit_id,result.status))));
-        }
-
-        let output = String::from_utf8(result.stdout)?;
-        match output.trim() {
-            "" => return Ok(false),
-            _ => return Ok(true)
-        };                
     }
 
     fn find_commits(&self, from_id: Oid, to_id: Oid) -> Result<Vec<Commit<'_>>, Box<dyn Error>> {
@@ -213,16 +158,22 @@ impl Git for LiveGit {
         Ok(commits)
     }
 
-    fn verify_commit_signature(&self, commit: &Commit<'_>, fingerprints: &HashMap<String, Fingerprint>) -> Result<String, Box<dyn Error>> {
+    fn verify_commit_signature(&self, commit: &Commit<'_>, fingerprints: &HashMap<String, Fingerprint>) -> Result<bool, Box<dyn Error>> {
         let commit_id = commit.id();
         let committer = commit.committer();
         let committer_email = match committer.email() {
             Some(email) => email,
-            None => return Err(Box::new(CapnError::new(format!("Commit {} does not have a valid committer: no email address", commit_id))))
+            None => {
+                error!("Commit {} does not have a valid committer: no email address", commit_id);
+                return Ok(false);
+            }
         };
         let expected_fingerprint = match fingerprints.get(committer_email) {
             Some(f) => f,
-            None => return Err(Box::new(CapnError::new(format!("Did not find GPG key for fingerprint for commit {}, committer {}", commit_id, committer_email))))
+            None => {
+                error!("Did not find GPG key for commit {}, committer {}", commit_id, committer_email);
+                return Ok(false);
+            }
         };
             
         debug!("Verify signature for commit {}", commit_id);
@@ -234,43 +185,19 @@ impl Git for LiveGit {
             .arg(commit_id.to_string())
             .output()?;
         debug!("RESULT {:?}", result);
-        if !result.status.success() {
-            let error_message = format!("Call to git verify failed for commit {} : status {} : author {:?} : committer {:?}",
-             commit_id, result.status, commit.author().name(), commit.committer().name());
-            return Err(Box::new(CapnError::new(error_message)));
-        }
 
         let encoded = String::from_utf8(result.stderr)?;
-
         
-        let fingerprints = encoded.split('\n')
-            .filter(|s| s.contains(&format!("VALIDSIG {}", expected_fingerprint.id)))
-            .filter_map(|s| s.split(' ').nth(2).map(String::from))
-            .collect::<Vec<_>>();
-        let first = fingerprints.first();
-        debug!("Found valid fingerprint from commit signature {:?}", first);
-        match first {
-            Some(f) => return Ok(f.to_string()),
-            None => {
-                let error_message = format!("Valid fingerprint for commit {} : author {:?} : committer {:?}",
-                 commit_id, commit.author().name(), commit.committer().name());
-                return Err(Box::new(CapnError::new(error_message)))
-            }
-        };
-             
-    }
+        let valid = encoded.split('\n')
+            .any(|s| s.contains(&format!("VALIDSIG {}", expected_fingerprint.id)));
 
-    fn find_common_ancestor(&self, commit1_id: Oid, commit2_id: Oid) -> Result<Oid, Box<dyn Error>> {
-        debug!("Find common ancestor for commits {} {}", commit1_id, commit2_id);
-        let base = self.repo.merge_base(commit1_id, commit2_id)?;
-        debug!("Found valid common ancestor : {:?}", base);
-        Ok(base)
+        if valid {
+            Ok(true)
+        } else {
+            error!("Commit {} was not signed with a valid signature", commit_id);
+            Ok(false)
+        }
              
-    }
-
-    fn not_merge_commit(commit: &Commit<'_>) -> bool {
-        let parent_count = commit.parent_count();
-        return if parent_count == 1 { true } else { false };
     }
 
     fn merge_commit(new_commit: &Commit<'_>) -> bool {
