@@ -91,14 +91,6 @@ fn verify_git_commits_happy_path_unsigned_trivial_no_fast_forward_merge() {
 }
 
 #[test]
-fn verify_git_commits_happy_path_pushing_previously_checked_merge_commit() {
-    // This is an edge case for checking that merges have multiple authors
-    before_all();
-    let result = policies::verify_git_commits::<LiveGit, LiveGpg>(&verify_commits_config(), "3eb315d10e2ad89555d7bfc78a1db1ce07bce434", "3eb315d10e2ad89555d7bfc78a1db1ce07bce434", "refs/heads/master").unwrap();
-    assert!(result.is_ok(), "Error: {:?}", result);
-}
-
-#[test]
 fn verify_git_commits_happy_path_unsigned_trivial_merge() {
     before_all();
     let result = policies::verify_git_commits::<LiveGit, LiveGpg>(&verify_commits_config(), "eb5e0185546b0bb1a13feec6b9ee8b39985fea42", "6754e4ec9b2dec567190d5a7f0be18b1a23d632a", "refs/heads/master").unwrap();
@@ -144,5 +136,28 @@ fn verify_git_commits_invalid_author() {
 fn verify_git_commits_code_injected_into_unsigned_merge() {
     before_all();
     let result = policies::verify_git_commits::<LiveGit, LiveGpg>(&verify_commits_config(), "eb5e0185546b0bb1a13feec6b9ee8b39985fea42", "eef93e7f977c125f92fc78116fc9b881e4055ae8", "refs/heads/master").unwrap();
+    assert!(result.is_err());
+}
+
+
+#[test]
+fn verify_git_commits_happy_path_pushing_previously_checked_merge_commit() {
+    // This is an edge case for checking that merges have multiple authors
+    before_all();
+    let result = policies::verify_git_commits::<LiveGit, LiveGpg>(&verify_commits_config(), "3eb315d10e2ad89555d7bfc78a1db1ce07bce434", "3eb315d10e2ad89555d7bfc78a1db1ce07bce434", "refs/heads/master").unwrap();
+    assert!(result.is_ok(), "Error: {:?}", result);
+}
+
+#[test]
+fn verify_git_commits_author_merged_own_code_not_on_head() {
+    before_all();
+    let result = policies::verify_git_commits::<LiveGit, LiveGpg>(&verify_commits_config(), "eb5e0185546b0bb1a13feec6b9ee8b39985fea42", "6004dfdb071c71e5e76ad55b924b576487e1c485", "refs/heads/valid-branch").unwrap();
+    assert!(result.is_ok(), "Error: {:?}", result);
+}
+
+#[test]
+fn verify_git_commits_author_merged_own_code_on_head() {
+    before_all();
+    let result = policies::verify_git_commits::<LiveGit, LiveGpg>(&verify_commits_config(), "eb5e0185546b0bb1a13feec6b9ee8b39985fea42", "6004dfdb071c71e5e76ad55b924b576487e1c485", "refs/heads/master").unwrap();
     assert!(result.is_err());
 }
