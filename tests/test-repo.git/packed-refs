@@ -2,8 +2,9 @@
 afe2141ef20abd098927adc66d6728821cb34f59 refs/heads/invalid-author
 eef93e7f977c125f92fc78116fc9b881e4055ae8 refs/heads/invalid-merge-with-additions
 eb5e0185546b0bb1a13feec6b9ee8b39985fea42 refs/heads/master
+6004dfdb071c71e5e76ad55b924b576487e1c485 refs/heads/same-author
 d2e3bfdc923986d04e7a6368b5fdd78b1ddf84f1 refs/heads/unsigned
 e9752e78505f3c9bcec15d4bef4299caf0538388 refs/heads/unsigned-buried-behind-merge
-4a19ec7a1543fb83f63fbd6e8e0ca17ae6c986a3 refs/heads/valid-automerge-commit
+6754e4ec9b2dec567190d5a7f0be18b1a23d632a refs/heads/valid-automerge-commit
 26b9047d071ad631d4a7c25df8bfd5361a679938 refs/heads/valid-branch
 3eb315d10e2ad89555d7bfc78a1db1ce07bce434 refs/heads/valid-merge

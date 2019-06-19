@@ -107,7 +107,7 @@ Fingerprint, Name, Email. For example:
   recv_keys_par = true # run key requests to keyserver in parallel
   skip_recv_keys = false # if true, do not fetch keys from the keyserver
 
-  verify_different_authors = true # if true, merge commits being pushed should have multiple authors in the branch
+  verify_different_authors = true # if true, merge commits to the head branch of the repo should have multiple authors in the branch
 #+END_SRC
 * Development
 

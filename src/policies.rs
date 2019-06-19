@@ -77,7 +77,7 @@ pub fn prepend_branch_name<F: Fs, G: Git>(commit_file: PathBuf) -> Result<Policy
     Ok(PolicyResult::Ok)
 }
 
-pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_value: &str, new_value: &str) -> Result<PolicyResult, Box<dyn Error>> {
+pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_value: &str, new_value: &str, ref_name: &str) -> Result<PolicyResult, Box<dyn Error>> {
     info!("{}", seperator("verify_git_commits STARTED"));
     let git = G::new()?;
     let start = Instant::now();
@@ -91,9 +91,6 @@ pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_v
     } else if git.is_tag(new_commit_id) {
         info!("{}", block("TAG detected, no commits to verify."))
     } else {
-        let new_commit = git.find_commit(new_commit_id)?;
-        let new_branch = old_commit_id.is_zero();
-        let merging = G::merge_commit(&new_commit) && !new_branch;
         let commits = commits_to_verify(&git, old_commit_id, new_commit_id)?;
 
         info!("Number of commits to verify {} : ", commits.len());
@@ -126,8 +123,8 @@ pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_v
             info!("{}", seperator(""));
         }
         
-        if merging && config.verify_different_authors {
-            policy_result = policy_result.and(verify_different_authors::<G>(&commits, new_commit_id));
+        if config.verify_different_authors {
+            policy_result = policy_result.and(verify_different_authors::<G>(&commits, &git, old_commit_id, new_commit_id, ref_name)?);
             info!("{}", seperator(""));
         }
     }
@@ -176,16 +173,36 @@ fn verify_commit_signatures<G: Git>(git: &G, commits: &Vec<Commit<'_>>, fingerpr
         .collect()
 }
 
-fn verify_different_authors<G: Git>(commits: &Vec<Commit<'_>>, id: Oid) -> PolicyResult {
+fn verify_different_authors<G: Git>(commits: &Vec<Commit<'_>>, git: &G, old_commit_id: Oid, new_commit_id: Oid, ref_name: &str) -> Result<PolicyResult, Box<dyn Error>> {
     info!("Verify multiple authors");
-    let authors : HashSet<_> = commits.iter().filter_map(|c| {
-        c.author().email().map(|e| e.to_string())
-    }).collect();
-    debug!("Author set: {:#?}", authors);
-    if authors.len() <= 1 {
-        PolicyResult::NotEnoughAuthors(id)
+
+    let new_commit = git.find_commit(new_commit_id)?;
+    let new_branch = old_commit_id.is_zero();
+    let is_merge = G::merge_commit(&new_commit);
+    let is_head = git.is_head(ref_name)?;
+
+    if !is_head {
+        debug!("Not updating the head of the repo, does not require multiple authors");
+        Ok(PolicyResult::Ok)
+    } else if !is_merge {
+        debug!("Not a merge commit, does not require multiple authors");
+        Ok(PolicyResult::Ok)
+    } else if new_branch {
+        debug!("New branch does not require multiple authors for a merge commit");
+        Ok(PolicyResult::Ok)
+    } else if commits.len() == 0 {
+        debug!("No new commits pushed, does not require multiple authors");
+        Ok(PolicyResult::Ok)
     } else {
-        PolicyResult::Ok
+        let authors : HashSet<_> = commits.iter().filter_map(|c| {
+            c.author().email().map(|e| e.to_string())
+        }).collect();
+        debug!("Author set: {:#?}", authors);
+        if authors.len() <= 1 {
+            Ok(PolicyResult::NotEnoughAuthors(new_commit_id))
+        } else {
+            Ok(PolicyResult::Ok)
+        }
     }
 }
 
