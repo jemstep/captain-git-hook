@@ -178,13 +178,19 @@ fn verify_commit_signatures<G: Git>(git: &G, commits: &Vec<Commit<'_>>, fingerpr
 
 fn verify_different_authors<G: Git>(commits: &Vec<Commit<'_>>, id: Oid) -> PolicyResult {
     info!("Verify multiple authors");
-    let authors : HashSet<_> = commits.iter().filter_map(|c| {
-        c.author().email().map(|e| e.to_string())
-    }).collect();
-    debug!("Author set: {:#?}", authors);
-    if authors.len() <= 1 {
-        PolicyResult::NotEnoughAuthors(id)
+
+    if commits.len() > 0 {
+        let authors : HashSet<_> = commits.iter().filter_map(|c| {
+            c.author().email().map(|e| e.to_string())
+        }).collect();
+        debug!("Author set: {:#?}", authors);
+        if authors.len() <= 1 {
+            PolicyResult::NotEnoughAuthors(id)
+        } else {
+            PolicyResult::Ok
+        }
     } else {
+        debug!("Verify multiple authors passed, no new commits pushed");
         PolicyResult::Ok
     }
 }

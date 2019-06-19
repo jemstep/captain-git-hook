@@ -87,6 +87,16 @@ fn verify_git_commits_happy_path_unsigned_trivial_no_fast_forward_merge() {
 }
 
 #[test]
+fn verify_git_commits_happy_path_pushing_previously_checked_merge_commit() {
+    // This is an edge case for checking that merges have multiple authors
+    init_logging();
+    set_current_dir_to_test_repo();
+    import_test_key();
+    let result = policies::verify_git_commits::<LiveGit, LiveGpg>(&verify_commits_config(), "3eb315d10e2ad89555d7bfc78a1db1ce07bce434", "3eb315d10e2ad89555d7bfc78a1db1ce07bce434").unwrap();
+    assert!(result.is_ok(), "Error: {:?}", result);
+}
+
+#[test]
 fn verify_git_commits_happy_path_unsigned_trivial_merge() {
     init_logging();
     set_current_dir_to_test_repo();
