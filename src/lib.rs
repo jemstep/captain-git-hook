@@ -59,15 +59,15 @@ pub fn prepare_commit_msg<F: Fs, G: Git>(opt: PrepareCommitMsg, config: Config) 
     }
 }
 
-pub fn pre_push<G: Git, P: Gpg>(_opt: &PrePush, config: &Config, _local_ref: &str, local_sha: &str, _remote_ref: &str, remote_sha: &str) -> Result<PolicyResult, Box<dyn Error>> {
+pub fn pre_push<G: Git, P: Gpg>(_opt: &PrePush, config: &Config, local_ref: &str, local_sha: &str, _remote_ref: &str, remote_sha: &str) -> Result<PolicyResult, Box<dyn Error>> {
     vec![
-        config.verify_git_commits.as_ref().map(|c| verify_git_commits::<G, P>(c, remote_sha, local_sha))
+        config.verify_git_commits.as_ref().map(|c| verify_git_commits::<G, P>(c, remote_sha, local_sha, local_ref))
     ].into_iter().flatten().collect()
 }
 
-pub fn pre_receive<G: Git, P: Gpg>(config: &Config, old_value: &str, new_value: &str, _ref_name: &str) -> Result<PolicyResult, Box<dyn Error>> {
+pub fn pre_receive<G: Git, P: Gpg>(config: &Config, old_value: &str, new_value: &str, ref_name: &str) -> Result<PolicyResult, Box<dyn Error>> {
     vec![
-        config.verify_git_commits.as_ref().map(|c| verify_git_commits::<G, P>(c, old_value, new_value))
+        config.verify_git_commits.as_ref().map(|c| verify_git_commits::<G, P>(c, old_value, new_value, ref_name))
     ].into_iter().flatten().collect()
 }
 

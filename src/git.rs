@@ -24,6 +24,7 @@ pub trait Git: Sized {
     fn merge_commit(new_commit: &Commit<'_>) -> bool;
     fn is_identical_tree_to_any_parent(commit: &Commit<'_>) -> bool;
     fn is_trivial_merge_commit(&self, commit: &Commit<'_>) -> bool;
+    fn is_head(&self, ref_name: &str) -> Result<bool, Box<dyn Error>>;
     
     fn verify_commit_signature(&self,commit: &Commit<'_>, fingerprints: &HashMap<String, Fingerprint>) -> Result<bool, Box<dyn Error>>;
     
@@ -223,6 +224,11 @@ impl Git for LiveGit {
             }
             _ => false
         }
+    }
+
+    fn is_head(&self, ref_name: &str) -> Result<bool, Box<dyn Error>> {
+        let head = self.repo.head()?;
+        Ok(Some(ref_name) == head.name())
     }
 
     fn is_tag(&self, id: Oid) -> bool {
