@@ -91,9 +91,6 @@ pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_v
     } else if git.is_tag(new_commit_id) {
         info!("{}", block("TAG detected, no commits to verify."))
     } else {
-        let new_commit = git.find_commit(new_commit_id)?;
-        let new_branch = old_commit_id.is_zero();
-        let merging = G::merge_commit(&new_commit) && !new_branch;
         let commits = commits_to_verify(&git, old_commit_id, new_commit_id)?;
 
         info!("Number of commits to verify {} : ", commits.len());
@@ -126,8 +123,8 @@ pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_v
             info!("{}", seperator(""));
         }
         
-        if merging && config.verify_different_authors {
-            policy_result = policy_result.and(verify_different_authors::<G>(&commits, new_commit_id));
+        if config.verify_different_authors {
+            policy_result = policy_result.and(verify_different_authors::<G>(&commits, &git, old_commit_id, new_commit_id)?);
             info!("{}", seperator(""));
         }
     }
@@ -176,22 +173,32 @@ fn verify_commit_signatures<G: Git>(git: &G, commits: &Vec<Commit<'_>>, fingerpr
         .collect()
 }
 
-fn verify_different_authors<G: Git>(commits: &Vec<Commit<'_>>, id: Oid) -> PolicyResult {
+fn verify_different_authors<G: Git>(commits: &Vec<Commit<'_>>, git: &G, old_commit_id: Oid, new_commit_id: Oid) -> Result<PolicyResult, Box<dyn Error>> {
     info!("Verify multiple authors");
 
-    if commits.len() > 0 {
+    let new_commit = git.find_commit(new_commit_id)?;
+    let new_branch = old_commit_id.is_zero();
+    let is_merge = G::merge_commit(&new_commit);
+
+    if !is_merge {
+        debug!("Not a merge commit, does not require multiple authors");
+        Ok(PolicyResult::Ok)
+    } else if new_branch {
+        debug!("New branch does not require multiple authors for a merge commit");
+        Ok(PolicyResult::Ok)
+    } else if commits.len() == 0 {
+        debug!("Verify multiple authors passed, no new commits pushed");
+        Ok(PolicyResult::Ok)
+    } else {
         let authors : HashSet<_> = commits.iter().filter_map(|c| {
             c.author().email().map(|e| e.to_string())
         }).collect();
         debug!("Author set: {:#?}", authors);
         if authors.len() <= 1 {
-            PolicyResult::NotEnoughAuthors(id)
+            Ok(PolicyResult::NotEnoughAuthors(new_commit_id))
         } else {
-            PolicyResult::Ok
+            Ok(PolicyResult::Ok)
         }
-    } else {
-        debug!("Verify multiple authors passed, no new commits pushed");
-        PolicyResult::Ok
     }
 }
 
