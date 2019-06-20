@@ -216,11 +216,19 @@ impl Git for LiveGit {
 
         match &commit.parents().collect::<Vec<_>>()[..] {
             [a, b] => {
-                let tree_id = commit.tree_id();
-                self.repo.merge_commits(&a, &b, Some(MergeOptions::new().fail_on_conflict(true)))
-                    .and_then(|mut index| index.write_tree_to(&self.repo))
-                    .map(|written_tree| written_tree == tree_id)
-                    .unwrap_or(false)
+                let expected_tree_id = commit.tree_id();
+                let reproduced_tree_id =  self.repo
+                    .merge_commits(&a, &b, Some(MergeOptions::new().fail_on_conflict(true)))
+                    .and_then(|mut index| index.write_tree_to(&self.repo));
+                let matches = reproduced_tree_id
+                    .as_ref()
+                    .map(|id| *id == expected_tree_id)
+                    .unwrap_or(false);
+
+                if !matches {
+                    trace!("Merge could not be reproduced. Expected tree id {}, found {:?}", expected_tree_id, reproduced_tree_id);
+                }
+                matches
             }
             _ => false
         }
