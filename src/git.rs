@@ -2,6 +2,7 @@ use git2::{Repository, Commit, Oid};
 use std::fs::File;
 use std::io::prelude::*;
 use crate::fingerprints::Fingerprint;
+use crate::error::CapnError;
 use std::error::Error;
 use std::process::*;
 use std::str;
@@ -23,7 +24,7 @@ pub trait Git: Sized {
     fn find_commit_fingerprints(&self, team_fingerprint_file: &str, commits: &Vec<Commit<'_>>)  -> Result<HashMap<String, Fingerprint>, Box<dyn Error>>;
     fn merge_commit(new_commit: &Commit<'_>) -> bool;
     fn is_identical_tree_to_any_parent(commit: &Commit<'_>) -> bool;
-    fn is_trivial_merge_commit(&self, commit: &Commit<'_>) -> bool;
+    fn is_trivial_merge_commit(&self, commit: &Commit<'_>) -> Result<bool, Box<dyn Error>>;
     fn is_head(&self, ref_name: &str) -> Result<bool, Box<dyn Error>>;
     
     fn verify_commit_signature(&self,commit: &Commit<'_>, fingerprints: &HashMap<String, Fingerprint>) -> Result<bool, Box<dyn Error>>;
@@ -211,15 +212,16 @@ impl Git for LiveGit {
         commit.parents().any(|p| p.tree_id() == tree_id)
     }
 
-    fn is_trivial_merge_commit(&self, commit: &Commit<'_>) -> bool {
+    fn is_trivial_merge_commit(&self, commit: &Commit<'_>) -> Result<bool, Box<dyn Error>> {
         use git2::MergeOptions;
-
+        
+        let temp_repo = TempRepo::new(commit.id())?;
         match &commit.parents().collect::<Vec<_>>()[..] {
             [a, b] => {
                 let expected_tree_id = commit.tree_id();
                 let reproduced_tree_id =  self.repo
                     .merge_commits(&a, &b, Some(MergeOptions::new().fail_on_conflict(true)))
-                    .and_then(|mut index| index.write_tree_to(&self.repo));
+                    .and_then(|mut index| index.write_tree_to(&temp_repo.repo));
                 let matches = reproduced_tree_id
                     .as_ref()
                     .map(|id| *id == expected_tree_id)
@@ -228,9 +230,9 @@ impl Git for LiveGit {
                 if !matches {
                     trace!("Merge could not be reproduced. Expected tree id {}, found {:?}", expected_tree_id, reproduced_tree_id);
                 }
-                matches
+                Ok(matches)
             }
-            _ => false
+            _ => Ok(false)
         }
     }
 
@@ -245,5 +247,39 @@ impl Git for LiveGit {
             _ => false
         }
     }
-   
+}
+
+struct TempRepo {
+    repo: Repository
+}
+
+impl TempRepo {
+    fn new(commit_id: Oid) -> Result<TempRepo,Box<dyn Error>> {
+        let max_attempts = 20;
+        let tmp_dir = std::env::temp_dir();
+
+        for suffix in 0..max_attempts {
+            let tmp_repo_path = tmp_dir.join(format!("capn_tmp_{}_{}.git", commit_id, suffix));
+            match std::fs::create_dir(&tmp_repo_path) {
+                Err(ref e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(e) => return Err(Box::new(e)),
+                Ok(_) => {
+                    trace!("Created temp repo for verification: {}", tmp_repo_path.display());
+                    return Ok(TempRepo{repo: Repository::init_bare(&tmp_repo_path)?})
+                }
+            };
+        }
+
+        Err(Box::new(CapnError::new(String::from("Max attempts exceeded looking for a new temp repo location"))))
+    }
+}
+
+impl Drop for TempRepo {
+    fn drop(&mut self) {
+        trace!("Cleaning up temp repo: {}", self.repo.path().display());
+        let drop_result = std::fs::remove_dir_all(&self.repo.path());
+        if let Err(e) = drop_result {
+            warn!("Failed to clean up temp repo: {}", e);
+        }
+    }
 }

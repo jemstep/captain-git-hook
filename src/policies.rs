@@ -19,6 +19,7 @@ use log::*;
 pub enum PolicyResult {
     Ok,
     UnsignedCommit(Oid),
+    UnsignedMergeCommit(Oid),
     NotEnoughAuthors(Oid),
     InvalidAuthorEmail(Oid, String),
     MissingAuthorEmail(Oid),
@@ -51,6 +52,7 @@ impl fmt::Display for PolicyResult {
         match self {
             Ok => write!(f, "Ok"),
             UnsignedCommit(id) => write!(f, "Commit does not have a valid GPG signature: {}", id),
+            UnsignedMergeCommit(id) => write!(f, "Commit does not have a valid GPG signature: {}. This is a merge commit, please note that if there were conflicts that needed to be resolved then the commit needs a signature.", id),
             NotEnoughAuthors(id) => write!(f, "Merge commit needs to have multiple authors in the branch: {}", id),
             InvalidAuthorEmail(id, email) => write!(f, "Commit has an invalid author email ({}): {}", email, id),
             MissingAuthorEmail(id) => write!(f, "Commit does not have an author email: {}", id),
@@ -153,20 +155,18 @@ fn verify_commit_signatures<G: Git>(git: &G, commits: &Vec<Commit<'_>>, fingerpr
             if G::is_identical_tree_to_any_parent(commit) {
                 debug!("{}: verified identical to one of its parents, no signature required", commit.id());
                 Ok(PolicyResult::Ok)
-            } else if git.is_trivial_merge_commit(commit) {
+            } else if git.verify_commit_signature(commit, fingerprints)? {
+                debug!("{}: verified with a valid signature", commit.id());
+                Ok(PolicyResult::Ok)
+            } else if git.is_trivial_merge_commit(commit)? {
                 debug!("{}: verified to be a trivial merge of its parents, no signature required", commit.id());
                 Ok(PolicyResult::Ok)
-            } else {
-                match git.verify_commit_signature(commit, fingerprints) {
-                    Ok(true) => {
-                        debug!("{}: verified with a valid signature", commit.id());
-                        Ok(PolicyResult::Ok)
-                    },
-                    Ok(false) => {
-                        debug!("{}: unverified, requies a valid signature", commit.id());
-                        Ok(PolicyResult::UnsignedCommit(commit.id()))
-                    },
-                    Err(e) => Err(e)
+            }  else {
+                debug!("{}: unverified, requies a valid signature", commit.id());
+                if G::merge_commit(&commit) {
+                    Ok(PolicyResult::UnsignedMergeCommit(commit.id()))
+                } else {
+                    Ok(PolicyResult::UnsignedCommit(commit.id()))
                 }
             }
         })
