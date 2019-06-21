@@ -153,7 +153,7 @@ fn verify_commit_signatures<G: Git>(git: &G, commits: &Vec<Commit<'_>>, fingerpr
             if G::is_identical_tree_to_any_parent(commit) {
                 debug!("{}: verified identical to one of its parents, no signature required", commit.id());
                 Ok(PolicyResult::Ok)
-            } else if git.is_trivial_merge_commit(commit) {
+            } else if git.is_trivial_merge_commit(commit)? {
                 debug!("{}: verified to be a trivial merge of its parents, no signature required", commit.id());
                 Ok(PolicyResult::Ok)
             } else {
