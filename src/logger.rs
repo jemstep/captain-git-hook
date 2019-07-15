@@ -19,17 +19,16 @@ impl Log for Logger {
             return;
         }
 
-        eprintln!("{} - {} - {}", Local::now().format("%Y-%m-%d %H:%M:%S"), record.level(), record.args());
+        let formatted = format!("{} - {} - {}", Local::now().format("%Y-%m-%d %H:%M:%S"), record.level(), record.args());
 
-        if let Some(ref stream) = &self.tcp_stream {
-            match stream.lock() {
-                Ok(mut stream) => {
-                    writeln!(*stream, "{} - {} - {}", Local::now().format("%Y-%m-%d %H:%M:%S"), record.level(), record.args()).ok();
-                },
-                Err(_e) => {
-                }
-            }
-        }
+        eprintln!("{}", formatted);
+
+        self.tcp_stream.as_ref().map(|ref stream| {
+            stream.lock()
+                .map_err(|e| e.to_string())
+                .and_then(|mut stream| writeln!(*stream, "{}", formatted).map_err(|e| e.to_string()))
+                .unwrap_or_else(|e| eprintln!("Error: Failed to log over TCP - {}", e));
+        });
     }
 
     fn flush(&self) {
@@ -37,7 +36,6 @@ impl Log for Logger {
 }
 
 impl Logger {
-    /// creates a new stderr logger
     pub fn init(quiet: bool, verbosity: usize, tcp_target: Option<String>) {
         let level_filter = match (quiet, verbosity) {
             (true, _) => LevelFilter::Off,

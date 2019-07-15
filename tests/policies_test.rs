@@ -20,11 +20,7 @@ fn before_all() {
 }
 
 fn init_logging() {
-    use log::LevelFilter;
-    let _ = env_logger::builder()
-        .is_test(true)
-        .filter_level(LevelFilter::Trace)
-        .try_init();
+    capn::logger::Logger::init(false, 2, None);
 }
 
 fn set_current_dir_to_test_repo() {
