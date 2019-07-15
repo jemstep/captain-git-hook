@@ -15,10 +15,6 @@ impl Log for Logger {
     }
 
     fn log(&self, record: &Record<'_>) {
-        // colourize
-        // timestamp
-        // print level
-
         if !self.enabled(record.metadata()) {
             return;
         }

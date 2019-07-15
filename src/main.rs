@@ -24,6 +24,9 @@ pub struct Opt {
     /// Verbose mode (-v, -vv, -vvv, etc)
     #[structopt(short = "v", long = "verbose", parse(from_occurrences))]
     verbose: usize,
+    /// URL for logging over TCP
+    #[structopt(long = "log-url")]
+    log_url: Option<String>,
     /// Command to be run
     #[structopt(subcommand)]
     command: Command,
@@ -56,7 +59,7 @@ fn main() {
 
     Logger::init(
         opt.quiet, opt.verbose,
-        Some("localhost:1031".to_string())
+        opt.log_url
     );
     
     info!("{}", block("Ahoy, maties! Welcome to Capn Githook!"));
