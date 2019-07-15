@@ -32,6 +32,15 @@ impl Log for Logger {
     }
 
     fn flush(&self) {
+        std::io::stderr().flush()
+            .unwrap_or_else(|e| eprintln!("Error: Failed to flush StdErr logging stream - {}", e));
+
+        self.tcp_stream.as_ref().map(|ref stream| {
+            stream.lock()
+                .map_err(|e| e.to_string())
+                .and_then(|mut stream| stream.flush().map_err(|e| e.to_string()))
+                .unwrap_or_else(|e| eprintln!("Error: Failed to flush TCP logging stream - {}", e));
+        });
     }
 }
 
