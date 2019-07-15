@@ -54,7 +54,10 @@ enum Command {
 fn main() {
     let opt = Opt::from_args();
 
-    Logger::init();
+    Logger::init(
+        opt.quiet, opt.verbose,
+        Some("localhost:1031".to_string())
+    );
     
     info!("{}", block("Ahoy, maties! Welcome to Capn Githook!"));
 
