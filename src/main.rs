@@ -9,12 +9,11 @@ use capn::pretty::*;
 use capn::config::Config;
 use capn::*;
 use capn::policies::PolicyResult;
-
-use stderrlog;
-use log::*;
+use capn::logger::Logger;
 
 use std::io::stdin;
 use std::io::prelude::*;
+use log::*;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "Captain Git Hook", about = "A collection of tools for more opinionated Git usage")]
@@ -25,6 +24,9 @@ pub struct Opt {
     /// Verbose mode (-v, -vv, -vvv, etc)
     #[structopt(short = "v", long = "verbose", parse(from_occurrences))]
     verbose: usize,
+    /// URL for logging over TCP
+    #[structopt(long = "log-url")]
+    log_url: Option<String>,
     /// Command to be run
     #[structopt(subcommand)]
     command: Command,
@@ -54,13 +56,14 @@ enum Command {
 // errors, exit with a non-zero code.
 fn main() {
     let opt = Opt::from_args();
+    let log_level = match (opt.quiet, opt.verbose) {
+        (true, _) => LevelFilter::Off,
+        (false, 0) => LevelFilter::Info,
+        (false, 1) => LevelFilter::Debug,
+        (false, _) => LevelFilter::Trace,
+    };
 
-    stderrlog::new()
-        .module(module_path!())
-        .quiet(opt.quiet)
-        .verbosity(opt.verbose + 2) // Default is info (2)
-        .init()
-        .expect("ERROR: Logger was initialized twice");
+    Logger::init(log_level, opt.log_url);
     
     info!("{}", block("Ahoy, maties! Welcome to Capn Githook!"));
 
