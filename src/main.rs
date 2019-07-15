@@ -9,12 +9,11 @@ use capn::pretty::*;
 use capn::config::Config;
 use capn::*;
 use capn::policies::PolicyResult;
-
-use stderrlog;
-use log::*;
+use capn::logger::Logger;
 
 use std::io::stdin;
 use std::io::prelude::*;
+use log::*;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "Captain Git Hook", about = "A collection of tools for more opinionated Git usage")]
@@ -55,12 +54,7 @@ enum Command {
 fn main() {
     let opt = Opt::from_args();
 
-    stderrlog::new()
-        .module(module_path!())
-        .quiet(opt.quiet)
-        .verbosity(opt.verbose + 2) // Default is info (2)
-        .init()
-        .expect("ERROR: Logger was initialized twice");
+    Logger::init();
     
     info!("{}", block("Ahoy, maties! Welcome to Capn Githook!"));
 

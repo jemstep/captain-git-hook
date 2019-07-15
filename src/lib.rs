@@ -14,6 +14,7 @@ use crate::git::Git;
 use crate::fs::Fs;
 use crate::gpg::Gpg;
 
+pub mod logger;
 pub mod git;
 pub mod gpg;
 pub mod policies;
