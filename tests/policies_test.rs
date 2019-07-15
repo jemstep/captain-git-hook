@@ -8,6 +8,7 @@ use capn::gpg::LiveGpg;
 use std::process::*;
 
 use std::sync::Once;
+use log::LevelFilter;
 
 static BEFORE_ALL: Once = Once::new();
 
@@ -20,7 +21,7 @@ fn before_all() {
 }
 
 fn init_logging() {
-    capn::logger::Logger::init(false, 2, None);
+    capn::logger::Logger::init(LevelFilter::Trace, None);
 }
 
 fn set_current_dir_to_test_repo() {

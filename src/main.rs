@@ -56,11 +56,14 @@ enum Command {
 // errors, exit with a non-zero code.
 fn main() {
     let opt = Opt::from_args();
+    let log_level = match (opt.quiet, opt.verbose) {
+        (true, _) => LevelFilter::Off,
+        (false, 0) => LevelFilter::Info,
+        (false, 1) => LevelFilter::Debug,
+        (false, _) => LevelFilter::Trace,
+    };
 
-    Logger::init(
-        opt.quiet, opt.verbose,
-        opt.log_url
-    );
+    Logger::init(log_level, opt.log_url);
     
     info!("{}", block("Ahoy, maties! Welcome to Capn Githook!"));
 

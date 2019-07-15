@@ -45,15 +45,8 @@ impl Log for Logger {
 }
 
 impl Logger {
-    pub fn init(quiet: bool, verbosity: usize, tcp_target: Option<String>) {
-        let level_filter = match (quiet, verbosity) {
-            (true, _) => LevelFilter::Off,
-            (false, 0) => LevelFilter::Info,
-            (false, 1) => LevelFilter::Debug,
-            (false, _) => LevelFilter::Trace,
-        };
-        
-        log::set_max_level(level_filter);
+    pub fn init(level: LevelFilter, tcp_target: Option<String>) {
+        log::set_max_level(level);
         let tcp_stream = tcp_target
             .and_then(|ref uri| {
                 let connect_result = TcpStream::connect(uri);
