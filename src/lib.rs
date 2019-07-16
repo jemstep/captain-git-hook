@@ -22,7 +22,6 @@ pub mod config;
 pub mod error;
 pub mod fs;
 pub mod fingerprints;
-pub mod pretty;
 
 #[derive(Debug, StructOpt)]
 pub struct PrepareCommitMsg {

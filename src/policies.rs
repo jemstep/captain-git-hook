@@ -2,7 +2,6 @@ use crate::git::*;
 use crate::gpg::*;
 use crate::fs::*;
 use crate::config::VerifyGitCommitsConfig;
-use crate::pretty::*;
 use crate::fingerprints::*;
 
 use git2::{Commit, Oid};
@@ -80,7 +79,7 @@ pub fn prepend_branch_name<F: Fs, G: Git>(commit_file: PathBuf) -> Result<Policy
 }
 
 pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_value: &str, new_value: &str, ref_name: &str) -> Result<PolicyResult, Box<dyn Error>> {
-    info!("{}", seperator("verify_git_commits STARTED"));
+    info!("Executing policy: verify_git_commits");
     let git = G::new()?;
     let start = Instant::now();
     let old_commit_id = Oid::from_str(old_value)?;
@@ -89,15 +88,14 @@ pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_v
     let mut policy_result = PolicyResult::Ok;
         
     if new_commit_id.is_zero() {
-        info!("{}", block("DELETE BRANCH detected, no commits to verify."))
+        debug!("DELETE BRANCH detected, no commits to verify.")
     } else if git.is_tag(new_commit_id) {
-        info!("{}", block("TAG detected, no commits to verify."))
+        debug!("TAG detected, no commits to verify.")
     } else {
         let commits = commits_to_verify(&git, old_commit_id, new_commit_id)?;
 
-        info!("Number of commits to verify {} : ", commits.len());
+        debug!("Number of commits to verify {} : ", commits.len());
         for commit in &commits { G::debug_commit(&commit) };
-        info!("{}", seperator(""));
 
         let commit_fingerprints = git.find_commit_fingerprints(&config.team_fingerprints_file, &commits)?;
         let fingerprint_ids = commit_fingerprints.values().map(|f| f.id.clone()).collect();
@@ -114,20 +112,16 @@ pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_v
             }
         }
         
-        info!("{}", seperator(""));
         if config.verify_email_addresses {
             policy_result = policy_result.and(verify_email_addresses(&config.author_domain, &config.committer_domain, &commits));
-            info!("{}", seperator(""));
         }
        
         if config.verify_commit_signatures {
             policy_result = policy_result.and(verify_commit_signatures::<G>(&git, &commits, &commit_fingerprints)?);
-            info!("{}", seperator(""));
         }
         
         if config.verify_different_authors {
             policy_result = policy_result.and(verify_different_authors::<G>(&commits, &git, old_commit_id, new_commit_id, ref_name)?);
-            info!("{}", seperator(""));
         }
     }
 
@@ -140,7 +134,7 @@ pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_v
 
 fn commits_to_verify<'a, G: Git>(git: &'a G, old_commit_id: Oid, new_commit_id: Oid) -> Result<Vec<Commit<'a>>, Box<dyn Error>>  {
     if old_commit_id.is_zero() {
-        debug!("{}", block("NEW BRANCH detected"));
+        debug!("NEW BRANCH detected");
         git.find_unpushed_commits(new_commit_id)
     } else {
         git.find_commits(old_commit_id, new_commit_id)

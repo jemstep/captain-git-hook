@@ -5,10 +5,10 @@ use std::process::exit;
 use capn::git::{LiveGit, Git};
 use capn::gpg::LiveGpg;
 use capn::fs::LiveFs;
-use capn::pretty::*;
 use capn::config::Config;
 use capn::*;
 use capn::policies::PolicyResult;
+use capn::logger;
 use capn::logger::Logger;
 
 use std::io::stdin;
@@ -64,8 +64,8 @@ fn main() {
     };
 
     Logger::init(log_level, opt.log_url);
-    
-    info!("{}", block("Ahoy, maties! Welcome to Capn Githook!"));
+
+    logger::print_header("Ahoy, maties! Welcome to Capn Githook!", opt.quiet);
 
     let git = match LiveGit::new() {
         Ok(g) => g,
@@ -87,14 +87,17 @@ fn main() {
 
     match execute_command(opt.command, config) {
         Ok(PolicyResult::Ok) => {
-            info!("{}", block("Aye, me hearties! Welcome aboard!"));
+            info!("Checks passed - commits accepted");
+            logger::print_header("Aye, me hearties! Welcome aboard!", opt.quiet);
         },
         Ok(e)  => {
-            error!("{}", block(e));
+            error!("Checks failed - commits rejected - reason: {}", e);
+            logger::print_header(format!("Your commits are scallywags!\n{}", e), opt.quiet);
             exit(1);
         },
         Err(e) => {
-            error!("System error: {}", e);
+            error!("System error - commits rejected - reason: {}", e);
+            logger::print_header(format!("Something went wrong!\n{}", e), opt.quiet);
             exit(1);
         }
     }
