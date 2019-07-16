@@ -187,10 +187,10 @@ fn verify_different_authors<G: Git>(commits: &Vec<Commit<'_>>, git: &G, old_comm
             c.author().email().map(|e| e.to_string())
         }).collect();
         if authors.len() <= 1 {
-            error!("Multiple author verification failed: requires multiple authors, found {:?}", authors);
+            error!("Multiple author verification failed for {}: requires multiple authors, found {:?}", new_commit_id, authors);
             Ok(PolicyResult::NotEnoughAuthors(new_commit_id))
         } else {
-            info!("Multiple author verification passed: foundd multiple authors, {:?}", authors);
+            info!("Multiple author verification passed for {}: found multiple authors, {:?}", new_commit_id, authors);
             Ok(PolicyResult::Ok)
         }
     }
