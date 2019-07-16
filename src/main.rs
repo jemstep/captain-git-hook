@@ -9,7 +9,7 @@ use capn::config::Config;
 use capn::*;
 use capn::policies::PolicyResult;
 use capn::logger;
-use capn::logger::Logger;
+use capn::logger::{Logger, LoggingOpt};
 
 use std::io::stdin;
 use std::io::prelude::*;
@@ -18,15 +18,8 @@ use log::*;
 #[derive(Debug, StructOpt)]
 #[structopt(name = "Captain Git Hook", about = "A collection of tools for more opinionated Git usage")]
 pub struct Opt {
-    /// Silence all output
-    #[structopt(short = "q", long = "quiet")]
-    quiet: bool,
-    /// Verbose mode (-v, -vv, -vvv, etc)
-    #[structopt(short = "v", long = "verbose", parse(from_occurrences))]
-    verbose: usize,
-    /// URL for logging over TCP
-    #[structopt(long = "log-url")]
-    log_url: Option<String>,
+    #[structopt(flatten)]
+    logging: LoggingOpt,
     /// Command to be run
     #[structopt(subcommand)]
     command: Command,
@@ -56,16 +49,10 @@ enum Command {
 // errors, exit with a non-zero code.
 fn main() {
     let opt = Opt::from_args();
-    let log_level = match (opt.quiet, opt.verbose) {
-        (true, _) => LevelFilter::Off,
-        (false, 0) => LevelFilter::Info,
-        (false, 1) => LevelFilter::Debug,
-        (false, _) => LevelFilter::Trace,
-    };
+    let quiet = opt.logging.quiet;
+    Logger::init(opt.logging);
 
-    Logger::init(log_level, opt.log_url);
-
-    logger::print_header("Ahoy, maties! Welcome to Capn Githook!", opt.quiet);
+    logger::print_header("Ahoy, maties! Welcome to Capn Githook!", quiet);
 
     let git = match LiveGit::new() {
         Ok(g) => g,
@@ -88,16 +75,16 @@ fn main() {
     match execute_command(opt.command, config) {
         Ok(PolicyResult::Ok) => {
             info!("Checks passed - commits accepted");
-            logger::print_header("Aye, me hearties! Welcome aboard!", opt.quiet);
+            logger::print_header("Aye, me hearties! Welcome aboard!", quiet);
         },
         Ok(e)  => {
             error!("Checks failed - commits rejected - reason: {}", e);
-            logger::print_header(format!("Your commits are scallywags!\n{}", e), opt.quiet);
+            logger::print_header(format!("Your commits are scallywags!\n{}", e), quiet);
             exit(1);
         },
         Err(e) => {
             error!("System error - commits rejected - reason: {}", e);
-            logger::print_header(format!("Something went wrong!\n{}", e), opt.quiet);
+            logger::print_header(format!("Something went wrong!\n{}", e), quiet);
             exit(1);
         }
     }

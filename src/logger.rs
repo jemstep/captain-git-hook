@@ -8,6 +8,26 @@ use std::fmt::Display;
 use serde::Serialize;
 use serde_json;
 use uuid::Uuid;
+use structopt::StructOpt;
+
+#[derive(Debug, StructOpt)]
+pub struct LoggingOpt {
+    /// Silence all output
+    #[structopt(short = "q", long = "quiet")]
+    pub quiet: bool,
+    /// Verbose mode (-v, -vv, -vvv, etc)
+    #[structopt(short = "v", long = "verbose", parse(from_occurrences))]
+    pub verbose: usize,
+    /// URL for logging over TCP
+    #[structopt(long = "log-url")]
+    pub log_url: Option<String>,
+    /// User IP address for logging context
+    #[structopt(long = "ip")]
+    pub ip: Option<String>,
+    /// Username for logging context
+    #[structopt(long = "user")]
+    pub user: Option<String>
+}
 
 pub struct Logger {
     tcp_stream: Option<Mutex<TcpStream>>,
@@ -60,16 +80,22 @@ impl Log for Logger {
 }
 
 impl Logger {
-    pub fn init(level: LevelFilter, tcp_target: Option<String>) {
-        log::set_max_level(level);
+    pub fn init(opt: LoggingOpt) {
+        let log_level = match (opt.quiet, opt.verbose) {
+            (true, _) => LevelFilter::Off,
+            (false, 0) => LevelFilter::Info,
+            (false, 1) => LevelFilter::Debug,
+            (false, _) => LevelFilter::Trace,
+        };
+    
+        log::set_max_level(log_level);
         let context = LoggingContext {
             run_id: Uuid::new_v4(),
-            trigger: None,
-            user_id: None,
-            user_ip: None
+            user_id: opt.user,
+            user_ip: opt.ip
         };
         
-        let tcp_stream = tcp_target
+        let tcp_stream = opt.log_url
             .and_then(|ref uri| {
                 let connect_result = TcpStream::connect(uri);
                 if let Err(ref e) = connect_result {
@@ -108,7 +134,6 @@ struct LogMessage {
 #[derive(Serialize, Clone)]
 pub struct LoggingContext {
     run_id: Uuid,
-    trigger: Option<String>,
     user_id: Option<String>,
     user_ip: Option<String>,
 }
