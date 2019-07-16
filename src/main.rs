@@ -5,11 +5,11 @@ use std::process::exit;
 use capn::git::{LiveGit, Git};
 use capn::gpg::LiveGpg;
 use capn::fs::LiveFs;
-use capn::pretty::*;
 use capn::config::Config;
 use capn::*;
 use capn::policies::PolicyResult;
-use capn::logger::Logger;
+use capn::logger;
+use capn::logger::{Logger, LoggingOpt};
 
 use std::io::stdin;
 use std::io::prelude::*;
@@ -18,15 +18,8 @@ use log::*;
 #[derive(Debug, StructOpt)]
 #[structopt(name = "Captain Git Hook", about = "A collection of tools for more opinionated Git usage")]
 pub struct Opt {
-    /// Silence all output
-    #[structopt(short = "q", long = "quiet")]
-    quiet: bool,
-    /// Verbose mode (-v, -vv, -vvv, etc)
-    #[structopt(short = "v", long = "verbose", parse(from_occurrences))]
-    verbose: usize,
-    /// URL for logging over TCP
-    #[structopt(long = "log-url")]
-    log_url: Option<String>,
+    #[structopt(flatten)]
+    logging: LoggingOpt,
     /// Command to be run
     #[structopt(subcommand)]
     command: Command,
@@ -56,16 +49,10 @@ enum Command {
 // errors, exit with a non-zero code.
 fn main() {
     let opt = Opt::from_args();
-    let log_level = match (opt.quiet, opt.verbose) {
-        (true, _) => LevelFilter::Off,
-        (false, 0) => LevelFilter::Info,
-        (false, 1) => LevelFilter::Debug,
-        (false, _) => LevelFilter::Trace,
-    };
+    let quiet = opt.logging.quiet;
+    Logger::init(opt.logging);
 
-    Logger::init(log_level, opt.log_url);
-    
-    info!("{}", block("Ahoy, maties! Welcome to Capn Githook!"));
+    logger::print_header("Ahoy, maties! Welcome to Capn Githook!", quiet);
 
     let git = match LiveGit::new() {
         Ok(g) => g,
@@ -87,14 +74,17 @@ fn main() {
 
     match execute_command(opt.command, config) {
         Ok(PolicyResult::Ok) => {
-            info!("{}", block("Aye, me hearties! Welcome aboard!"));
+            info!("Checks passed - commits accepted");
+            logger::print_header("Aye, me hearties! Welcome aboard!", quiet);
         },
         Ok(e)  => {
-            error!("{}", block(e));
+            error!("Checks failed - commits rejected - reason: {}", e);
+            logger::print_header(format!("Your commits are scallywags!\n{}", e), quiet);
             exit(1);
         },
         Err(e) => {
-            error!("System error: {}", e);
+            error!("System error - commits rejected - reason: {}", e);
+            logger::print_header(format!("Something went wrong!\n{}", e), quiet);
             exit(1);
         }
     }
@@ -107,12 +97,13 @@ fn execute_command(command: Command, config: Config) -> Result<PolicyResult, Box
             prepare_commit_msg::<LiveFs, LiveGit>(args, config)
         },
         Command::PrePush(args) => {
+            info!("Calling pre-push");
             stdin().lock().lines()
                 .map(|raw_line| raw_line.map(|line| {
                     let mut fields = line.split(' ');
                     match (fields.next(), fields.next(), fields.next(), fields.next()) {
                         (Some(local_ref), Some(local_sha), Some(remote_ref), Some(remote_sha)) => {
-                            info!("Calling prepush with: {} {} {} {}", local_ref, local_sha, remote_ref, remote_sha);
+                            info!("Running pre-push for: {} {} {} {}", local_ref, local_sha, remote_ref, remote_sha);
                             pre_push::<LiveGit, LiveGpg>(&args, &config, local_ref, local_sha, remote_ref, remote_sha)
                         },
                         _ => {
@@ -125,12 +116,13 @@ fn execute_command(command: Command, config: Config) -> Result<PolicyResult, Box
                 .collect()
         },
         Command::PreReceive => {
+            info!("Calling pre-receive");
             stdin().lock().lines()
                 .map(|raw_line| raw_line.map(|line| {
                     let mut fields = line.split(' ');
                     match (fields.next(), fields.next(), fields.next()) {
                         (Some(old_value), Some(new_value), Some(ref_name)) => {
-                            info!("Calling prereceive with: {} {} {}", old_value, new_value, ref_name);
+                            info!("Running pre-receive for: {} {} {}", old_value, new_value, ref_name);
                             pre_receive::<LiveGit, LiveGpg>(&config, old_value, new_value, ref_name)
                         },
                         _ => {
