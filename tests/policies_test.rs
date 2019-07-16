@@ -5,10 +5,11 @@ use capn;
 use capn::git::LiveGit;
 use capn::gpg::LiveGpg;
 
+use capn::logger::{Logger, LoggingOpt};
+
 use std::process::*;
 
 use std::sync::Once;
-use log::LevelFilter;
 
 static BEFORE_ALL: Once = Once::new();
 
@@ -21,7 +22,13 @@ fn before_all() {
 }
 
 fn init_logging() {
-    capn::logger::Logger::init(LevelFilter::Trace, None);
+    Logger::init(LoggingOpt {
+        quiet: false,
+        verbose: 2,
+        log_url: None,
+        user: None,
+        ip: None
+    });
 }
 
 fn set_current_dir_to_test_repo() {

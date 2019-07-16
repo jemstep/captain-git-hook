@@ -36,23 +36,14 @@ pub trait Git: Sized {
     }
 
     fn debug_commit(commit: &Commit<'_>) {
-        debug!("CommitId: {}", commit.id());
-        if commit.parents().len() > 1 {
-            debug!("Merge:");
-            for id in commit.parent_ids() {
-                debug!(" {:.8}", id);
-            }
-            debug!("");
-        }
-        let author = commit.author();
-        debug!("Author: {}", author);
-        let committer = commit.committer();
-        debug!("Committer: {}", committer);
-        debug!("Message:");
-        for line in String::from_utf8_lossy(commit.message_bytes()).lines() {
-            debug!("    {}", line);
-        }
-        debug!("");
+        debug!(
+            "CommitId: {}, Parent(s): {:?}, Author: {}, Committer: {}, Message: {}",
+            commit.id(),
+            commit.parent_ids().fold("".to_string(), |acc, next| if acc.is_empty() { next.to_string() } else { format!("{},{}", acc, next) }),
+            commit.author(),
+            commit.committer(),
+            commit.summary().unwrap_or("")
+        );
     }
 }
 
@@ -132,7 +123,7 @@ impl Git for LiveGit {
     }
 
     fn find_commits(&self, from_id: Oid, to_id: Oid) -> Result<Vec<Commit<'_>>, Box<dyn Error>> {
-        info!("Find commits between {} to {}", from_id, to_id);
+        debug!("Find commits between {} to {}", from_id, to_id);
 
         let mut revwalk = self.repo.revwalk()?;
         revwalk.push(to_id)?;
@@ -147,7 +138,7 @@ impl Git for LiveGit {
     }
 
     fn find_unpushed_commits(&self, new_commit_id: Oid) -> Result<Vec<Commit<'_>>, Box<dyn Error>> {
-        info!("Get unpushed commits from {} ", new_commit_id);
+        debug!("Get unpushed commits from {} ", new_commit_id);
 
         let mut revwalk = self.repo.revwalk()?;
         revwalk.push(new_commit_id)?;
@@ -166,19 +157,18 @@ impl Git for LiveGit {
         let committer_email = match committer.email() {
             Some(email) => email,
             None => {
-                error!("Commit {} does not have a valid committer: no email address", commit_id);
+                debug!("Commit {} does not have a valid committer: no email address", commit_id);
                 return Ok(false);
             }
         };
         let expected_fingerprint = match fingerprints.get(committer_email) {
             Some(f) => f,
             None => {
-                error!("Did not find GPG key for commit {}, committer {}", commit_id, committer_email);
+                debug!("Did not find GPG key for commit {}, committer {}", commit_id, committer_email);
                 return Ok(false);
             }
         };
-            
-        debug!("Verify signature for commit {}", commit_id);
+ 
         let repo_path = self.repo.path();
         let result = Command::new("git")
             .current_dir(repo_path)
@@ -186,7 +176,7 @@ impl Git for LiveGit {
             .arg("--raw")
             .arg(commit_id.to_string())
             .output()?;
-        debug!("RESULT {:?}", result);
+        debug!("Result from calling git verify-commit on {}: {:?}", commit_id, result);
 
         let encoded = String::from_utf8(result.stderr)?;
         
@@ -194,12 +184,12 @@ impl Git for LiveGit {
             .any(|s| s.contains(&format!("VALIDSIG {}", expected_fingerprint.id)));
 
         if valid {
+            debug!("Commit {} was signed with a valid signature", commit_id);
             Ok(true)
         } else {
-            error!("Commit {} was not signed with a valid signature", commit_id);
+            debug!("Commit {} was not signed with a valid signature", commit_id);
             Ok(false)
         }
-             
     }
 
     fn merge_commit(new_commit: &Commit<'_>) -> bool {
@@ -226,10 +216,7 @@ impl Git for LiveGit {
                     .as_ref()
                     .map(|id| *id == expected_tree_id)
                     .unwrap_or(false);
-
-                if !matches {
-                    trace!("Merge could not be reproduced. Expected tree id {}, found {:?}", expected_tree_id, reproduced_tree_id);
-                }
+                
                 Ok(matches)
             }
             _ => Ok(false)

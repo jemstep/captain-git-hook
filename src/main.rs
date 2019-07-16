@@ -97,12 +97,13 @@ fn execute_command(command: Command, config: Config) -> Result<PolicyResult, Box
             prepare_commit_msg::<LiveFs, LiveGit>(args, config)
         },
         Command::PrePush(args) => {
+            info!("Calling pre-push");
             stdin().lock().lines()
                 .map(|raw_line| raw_line.map(|line| {
                     let mut fields = line.split(' ');
                     match (fields.next(), fields.next(), fields.next(), fields.next()) {
                         (Some(local_ref), Some(local_sha), Some(remote_ref), Some(remote_sha)) => {
-                            info!("Calling prepush with: {} {} {} {}", local_ref, local_sha, remote_ref, remote_sha);
+                            info!("Running pre-push for: {} {} {} {}", local_ref, local_sha, remote_ref, remote_sha);
                             pre_push::<LiveGit, LiveGpg>(&args, &config, local_ref, local_sha, remote_ref, remote_sha)
                         },
                         _ => {
@@ -115,12 +116,13 @@ fn execute_command(command: Command, config: Config) -> Result<PolicyResult, Box
                 .collect()
         },
         Command::PreReceive => {
+            info!("Calling pre-receive");
             stdin().lock().lines()
                 .map(|raw_line| raw_line.map(|line| {
                     let mut fields = line.split(' ');
                     match (fields.next(), fields.next(), fields.next()) {
                         (Some(old_value), Some(new_value), Some(ref_name)) => {
-                            info!("Calling prereceive with: {} {} {}", old_value, new_value, ref_name);
+                            info!("Running pre-receive for: {} {} {}", old_value, new_value, ref_name);
                             pre_receive::<LiveGit, LiveGpg>(&config, old_value, new_value, ref_name)
                         },
                         _ => {
