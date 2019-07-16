@@ -88,9 +88,9 @@ pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_v
     let mut policy_result = PolicyResult::Ok;
         
     if new_commit_id.is_zero() {
-        debug!("delete branch detected, no commits to verify.")
+        debug!("Delete branch detected, no commits to verify.")
     } else if git.is_tag(new_commit_id) {
-        debug!("tag detected, no commits to verify.")
+        debug!("Tag detected, no commits to verify.")
     } else {
         let commits = commits_to_verify(&git, old_commit_id, new_commit_id)?;
 
@@ -125,14 +125,14 @@ pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_v
         }
     }
 
-    info!("verify_git_commits COMPLETED in: {} ms", start.elapsed().as_millis());
+    info!("Policy verify_git_commits completed in: {} ms", start.elapsed().as_millis());
 
     Ok(policy_result)
 }
 
 fn commits_to_verify<'a, G: Git>(git: &'a G, old_commit_id: Oid, new_commit_id: Oid) -> Result<Vec<Commit<'a>>, Box<dyn Error>>  {
     if old_commit_id.is_zero() {
-        debug!("new branch detected");
+        debug!("New branch detected");
         git.find_unpushed_commits(new_commit_id)
     } else {
         git.find_commits(old_commit_id, new_commit_id)
