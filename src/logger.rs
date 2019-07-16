@@ -38,7 +38,10 @@ impl Log for Logger {
         self.tcp_stream.as_ref().map(|ref stream| {
             stream.lock()
                 .map_err(|e| e.to_string())
-                .and_then(|stream| serde_json::to_writer(&(*stream), &message).map_err(|e| e.to_string()))
+                .and_then(|mut stream| {
+                    serde_json::to_writer_pretty(&(*stream), &message).map_err(|e| e.to_string())?;
+                    stream.write(b"\n").map(|_| ()).map_err(|e| e.to_string())
+                })
                 .unwrap_or_else(|e| eprintln!("Error: Failed to log over TCP - {}", e));
         });
     }
