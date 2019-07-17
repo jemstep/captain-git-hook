@@ -1,16 +1,16 @@
-use crate::git::*;
-use crate::gpg::*;
-use crate::fs::*;
 use crate::config::VerifyGitCommitsConfig;
 use crate::fingerprints::*;
+use crate::fs::*;
+use crate::git::*;
+use crate::gpg::*;
 
 use git2::{Commit, Oid};
-use std::error::Error;
-use std::path::PathBuf;
-use std::time::Instant;
 use std::collections::{HashMap, HashSet};
+use std::error::Error;
 use std::fmt;
 use std::iter;
+use std::path::PathBuf;
+use std::time::Instant;
 
 use log::*;
 
@@ -30,13 +30,13 @@ impl PolicyResult {
     pub fn and(self, res: PolicyResult) -> PolicyResult {
         match self {
             PolicyResult::Ok => res,
-            x => x
+            x => x,
         }
     }
     pub fn is_ok(&self) -> bool {
         match self {
             PolicyResult::Ok => true,
-            _ => false
+            _ => false,
         }
     }
     pub fn is_err(&self) -> bool {
@@ -47,7 +47,7 @@ impl PolicyResult {
 impl fmt::Display for PolicyResult {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use PolicyResult::*;
-        
+
         match self {
             Ok => write!(f, "Ok"),
             UnsignedCommit(id) => write!(f, "Commit does not have a valid GPG signature: {}", id),
@@ -62,23 +62,30 @@ impl fmt::Display for PolicyResult {
 }
 
 impl iter::FromIterator<PolicyResult> for PolicyResult {
-    fn from_iter<I: IntoIterator<Item=PolicyResult>>(iter: I) -> Self {
+    fn from_iter<I: IntoIterator<Item = PolicyResult>>(iter: I) -> Self {
         iter.into_iter()
             .find(PolicyResult::is_err)
             .unwrap_or(PolicyResult::Ok)
     }
 }
 
-pub fn prepend_branch_name<F: Fs, G: Git>(commit_file: PathBuf) -> Result<PolicyResult, Box<dyn Error>> {
+pub fn prepend_branch_name<F: Fs, G: Git>(
+    commit_file: PathBuf,
+) -> Result<PolicyResult, Box<dyn Error>> {
     info!("Executing policy: prepend_branch_name");
-    
+
     let git = G::new()?;
     let branch = git.current_branch()?;
     F::prepend_string_to_file(branch, commit_file)?;
     Ok(PolicyResult::Ok)
 }
 
-pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_value: &str, new_value: &str, ref_name: &str) -> Result<PolicyResult, Box<dyn Error>> {
+pub fn verify_git_commits<G: Git, P: Gpg>(
+    config: &VerifyGitCommitsConfig,
+    old_value: &str,
+    new_value: &str,
+    ref_name: &str,
+) -> Result<PolicyResult, Box<dyn Error>> {
     info!("Executing policy: verify_git_commits");
     let git = G::new()?;
     let start = Instant::now();
@@ -86,7 +93,7 @@ pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_v
     let new_commit_id = Oid::from_str(new_value)?;
 
     let mut policy_result = PolicyResult::Ok;
-        
+
     if new_commit_id.is_zero() {
         debug!("Delete branch detected, no commits to verify.")
     } else if git.is_tag(new_commit_id) {
@@ -95,42 +102,66 @@ pub fn verify_git_commits<G: Git, P: Gpg>(config: &VerifyGitCommitsConfig, old_v
         let commits = commits_to_verify(&git, old_commit_id, new_commit_id)?;
 
         debug!("Number of commits to verify {} : ", commits.len());
-        for commit in &commits { G::debug_commit(&commit) };
+        for commit in &commits {
+            G::debug_commit(&commit)
+        }
 
-        let commit_fingerprints = git.find_commit_fingerprints(&config.team_fingerprints_file, &commits)?;
+        let commit_fingerprints =
+            git.find_commit_fingerprints(&config.team_fingerprints_file, &commits)?;
         let fingerprint_ids = commit_fingerprints.values().map(|f| f.id.clone()).collect();
 
         if config.skip_recv_keys {
             debug!("Skipping importing GPG keys");
         } else {
             debug!("Fetching GPG public keys from {}", config.keyserver);
-            
+
             if config.recv_keys_par {
-                let _result = P::par_receive_keys(&config.keyserver,&fingerprint_ids)?;
+                let _result = P::par_receive_keys(&config.keyserver, &fingerprint_ids)?;
             } else {
-                let _result = P::receive_keys(&config.keyserver,&fingerprint_ids)?;
+                let _result = P::receive_keys(&config.keyserver, &fingerprint_ids)?;
             }
         }
-        
+
         if config.verify_email_addresses {
-            policy_result = policy_result.and(verify_email_addresses(&config.author_domain, &config.committer_domain, &commits));
+            policy_result = policy_result.and(verify_email_addresses(
+                &config.author_domain,
+                &config.committer_domain,
+                &commits,
+            ));
         }
-       
+
         if config.verify_commit_signatures {
-            policy_result = policy_result.and(verify_commit_signatures::<G>(&git, &commits, &commit_fingerprints)?);
+            policy_result = policy_result.and(verify_commit_signatures::<G>(
+                &git,
+                &commits,
+                &commit_fingerprints,
+            )?);
         }
-        
+
         if config.verify_different_authors {
-            policy_result = policy_result.and(verify_different_authors::<G>(&commits, &git, old_commit_id, new_commit_id, ref_name)?);
+            policy_result = policy_result.and(verify_different_authors::<G>(
+                &commits,
+                &git,
+                old_commit_id,
+                new_commit_id,
+                ref_name,
+            )?);
         }
     }
 
-    info!("Policy verify_git_commits completed in: {} ms", start.elapsed().as_millis());
+    info!(
+        "Policy verify_git_commits completed in: {} ms",
+        start.elapsed().as_millis()
+    );
 
     Ok(policy_result)
 }
 
-fn commits_to_verify<'a, G: Git>(git: &'a G, old_commit_id: Oid, new_commit_id: Oid) -> Result<Vec<Commit<'a>>, Box<dyn Error>>  {
+fn commits_to_verify<'a, G: Git>(
+    git: &'a G,
+    old_commit_id: Oid,
+    new_commit_id: Oid,
+) -> Result<Vec<Commit<'a>>, Box<dyn Error>> {
     if old_commit_id.is_zero() {
         debug!("New branch detected");
         git.find_unpushed_commits(new_commit_id)
@@ -139,8 +170,11 @@ fn commits_to_verify<'a, G: Git>(git: &'a G, old_commit_id: Oid, new_commit_id: 
     }
 }
 
-
-fn verify_commit_signatures<G: Git>(git: &G, commits: &Vec<Commit<'_>>, fingerprints: &HashMap<String, Fingerprint>) -> Result<PolicyResult, Box<dyn Error>> {
+fn verify_commit_signatures<G: Git>(
+    git: &G,
+    commits: &Vec<Commit<'_>>,
+    fingerprints: &HashMap<String, Fingerprint>,
+) -> Result<PolicyResult, Box<dyn Error>> {
     commits.iter()
         .map(|commit| {
             if G::is_identical_tree_to_any_parent(commit) {
@@ -164,7 +198,13 @@ fn verify_commit_signatures<G: Git>(git: &G, commits: &Vec<Commit<'_>>, fingerpr
         .collect()
 }
 
-fn verify_different_authors<G: Git>(commits: &Vec<Commit<'_>>, git: &G, old_commit_id: Oid, new_commit_id: Oid, ref_name: &str) -> Result<PolicyResult, Box<dyn Error>> {
+fn verify_different_authors<G: Git>(
+    commits: &Vec<Commit<'_>>,
+    git: &G,
+    old_commit_id: Oid,
+    new_commit_id: Oid,
+    ref_name: &str,
+) -> Result<PolicyResult, Box<dyn Error>> {
     let new_commit = git.find_commit(new_commit_id)?;
     let new_branch = old_commit_id.is_zero();
     let is_merge = G::merge_commit(&new_commit);
@@ -183,45 +223,70 @@ fn verify_different_authors<G: Git>(commits: &Vec<Commit<'_>>, git: &G, old_comm
         info!("Multiple author verification passed for {}: No new commits pushed, does not require multiple authors", new_commit_id);
         Ok(PolicyResult::Ok)
     } else {
-        let authors : HashSet<_> = commits.iter().filter_map(|c| {
-            c.author().email().map(|e| e.to_string())
-        }).collect();
+        let authors: HashSet<_> = commits
+            .iter()
+            .filter_map(|c| c.author().email().map(|e| e.to_string()))
+            .collect();
         if authors.len() <= 1 {
-            error!("Multiple author verification failed for {}: requires multiple authors, found {:?}", new_commit_id, authors);
+            error!(
+                "Multiple author verification failed for {}: requires multiple authors, found {:?}",
+                new_commit_id, authors
+            );
             Ok(PolicyResult::NotEnoughAuthors(new_commit_id))
         } else {
-            info!("Multiple author verification passed for {}: found multiple authors, {:?}", new_commit_id, authors);
+            info!(
+                "Multiple author verification passed for {}: found multiple authors, {:?}",
+                new_commit_id, authors
+            );
             Ok(PolicyResult::Ok)
         }
     }
 }
 
-fn verify_email_addresses(author_domain: &str,committer_domain: &str, commits: &Vec<Commit<'_>>) -> PolicyResult {
-    commits.iter()
-        .map(|commit| {
-            match (commit.author().email(), commit.committer().email()) {
+fn verify_email_addresses(
+    author_domain: &str,
+    committer_domain: &str,
+    commits: &Vec<Commit<'_>>,
+) -> PolicyResult {
+    commits
+        .iter()
+        .map(
+            |commit| match (commit.author().email(), commit.committer().email()) {
                 (None, _) => {
-                    error!("Email address verification failed for {}: missing author email", commit.id());
+                    error!(
+                        "Email address verification failed for {}: missing author email",
+                        commit.id()
+                    );
                     PolicyResult::MissingAuthorEmail(commit.id())
-                },
+                }
                 (_, None) => {
-                    error!("Email address verification failed for {}: missing committer email", commit.id());
+                    error!(
+                        "Email address verification failed for {}: missing committer email",
+                        commit.id()
+                    );
                     PolicyResult::MissingCommitterEmail(commit.id())
-                },
+                }
                 (Some(s), _) if !s.ends_with(&format!("@{}", author_domain)) => {
-                    error!("Email address verification failed for {}: invalid author email {}", commit.id(), s.to_string());
+                    error!(
+                        "Email address verification failed for {}: invalid author email {}",
+                        commit.id(),
+                        s.to_string()
+                    );
                     PolicyResult::InvalidAuthorEmail(commit.id(), s.to_string())
-                },
+                }
                 (_, Some(s)) if !s.ends_with(&format!("@{}", committer_domain)) => {
-                    error!("Email address verification failed for {}: invalid committer email {}", commit.id(), s.to_string());
+                    error!(
+                        "Email address verification failed for {}: invalid committer email {}",
+                        commit.id(),
+                        s.to_string()
+                    );
                     PolicyResult::InvalidCommitterEmail(commit.id(), s.to_string())
-                },
+                }
                 _ => {
                     info!("Email address verification passed for {}", commit.id());
                     PolicyResult::Ok
                 }
-            }
-        })
+            },
+        )
         .collect()
 }
-

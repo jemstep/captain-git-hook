@@ -1,22 +1,25 @@
-use structopt::StructOpt;
 use std::error::Error;
 use std::process::exit;
+use structopt::StructOpt;
 
-use capn::git::{LiveGit, Git};
-use capn::gpg::LiveGpg;
-use capn::fs::LiveFs;
 use capn::config::Config;
-use capn::*;
-use capn::policies::PolicyResult;
+use capn::fs::LiveFs;
+use capn::git::{Git, LiveGit};
+use capn::gpg::LiveGpg;
 use capn::logger;
 use capn::logger::{Logger, LoggingOpt};
+use capn::policies::PolicyResult;
+use capn::*;
 
-use std::io::stdin;
-use std::io::prelude::*;
 use log::*;
+use std::io::prelude::*;
+use std::io::stdin;
 
 #[derive(Debug, StructOpt)]
-#[structopt(name = "Captain Git Hook", about = "A collection of tools for more opinionated Git usage")]
+#[structopt(
+    name = "Captain Git Hook",
+    about = "A collection of tools for more opinionated Git usage"
+)]
 pub struct Opt {
     #[structopt(flatten)]
     logging: LoggingOpt,
@@ -76,12 +79,12 @@ fn main() {
         Ok(PolicyResult::Ok) => {
             info!("Checks passed - commits accepted");
             logger::print_header("Aye, me hearties! Welcome aboard!", quiet);
-        },
-        Ok(e)  => {
+        }
+        Ok(e) => {
             error!("Checks failed - commits rejected - reason: {}", e);
             logger::print_header(format!("Your commits are scallywags!\n{}", e), quiet);
             exit(1);
-        },
+        }
         Err(e) => {
             error!("System error - commits rejected - reason: {}", e);
             logger::print_header(format!("Something went wrong!\n{}", e), quiet);
@@ -95,7 +98,7 @@ fn execute_command(command: Command, config: Config) -> Result<PolicyResult, Box
         Command::PrepareCommitMsg(args) => {
             info!("Calling prepare-commit-msg");
             prepare_commit_msg::<LiveFs, LiveGit>(args, config)
-        },
+        }
         Command::PrePush(args) => {
             info!("Calling pre-push");
             stdin().lock().lines()
@@ -114,7 +117,7 @@ fn execute_command(command: Command, config: Config) -> Result<PolicyResult, Box
                 }))
                 .flatten()
                 .collect()
-        },
+        }
         Command::PreReceive => {
             info!("Calling pre-receive");
             stdin().lock().lines()
@@ -133,10 +136,7 @@ fn execute_command(command: Command, config: Config) -> Result<PolicyResult, Box
                 }))
                 .flatten()
                 .collect()
-        },
-        Command::InstallHooks => {
-            install_hooks::<LiveGit>()
-                .map(|_| PolicyResult::Ok)
-        },
+        }
+        Command::InstallHooks => install_hooks::<LiveGit>().map(|_| PolicyResult::Ok),
     }
 }
