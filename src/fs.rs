@@ -1,6 +1,6 @@
 use std::fs::File;
-use std::path::PathBuf;
 use std::io::prelude::*;
+use std::path::PathBuf;
 
 pub trait Fs {
     fn prepend_string_to_file(s: String, filename: PathBuf) -> Result<(), std::io::Error>;

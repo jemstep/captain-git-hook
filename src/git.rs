@@ -1,13 +1,12 @@
-use git2::{Repository, Commit, Oid};
+use crate::error::CapnError;
+use crate::fingerprints::Fingerprint;
+use git2::{Commit, Oid, Repository};
+use std::collections::{HashMap, HashSet};
+use std::error::Error;
 use std::fs::File;
 use std::io::prelude::*;
-use crate::fingerprints::Fingerprint;
-use crate::error::CapnError;
-use std::error::Error;
 use std::process::*;
 use std::str;
-use std::collections::{HashSet, HashMap};
-
 
 use crate::config::*;
 use log::*;
@@ -15,20 +14,33 @@ use log::*;
 pub trait Git: Sized {
     fn new() -> Result<Self, Box<dyn Error>>;
     fn read_file(&self, path: &str) -> Result<String, Box<dyn Error>>;
-    fn write_git_file(&self, path: &str, file_mode: u32, contents: &str) -> Result<(), Box<dyn Error>>;
+    fn write_git_file(
+        &self,
+        path: &str,
+        file_mode: u32,
+        contents: &str,
+    ) -> Result<(), Box<dyn Error>>;
     fn current_branch(&self) -> Result<String, Box<dyn Error>>;
-    fn find_commits(&self,from_id: Oid,to_id: Oid) -> Result<Vec<Commit<'_>>, Box<dyn Error>>;
+    fn find_commits(&self, from_id: Oid, to_id: Oid) -> Result<Vec<Commit<'_>>, Box<dyn Error>>;
     fn is_tag(&self, id: Oid) -> bool;
     fn find_unpushed_commits(&self, new_commit_id: Oid) -> Result<Vec<Commit<'_>>, Box<dyn Error>>;
-    fn find_commit(&self,commit_id: Oid) -> Result<Commit<'_>, Box<dyn Error>>;
-    fn find_commit_fingerprints(&self, team_fingerprint_file: &str, commits: &Vec<Commit<'_>>)  -> Result<HashMap<String, Fingerprint>, Box<dyn Error>>;
+    fn find_commit(&self, commit_id: Oid) -> Result<Commit<'_>, Box<dyn Error>>;
+    fn find_commit_fingerprints(
+        &self,
+        team_fingerprint_file: &str,
+        commits: &Vec<Commit<'_>>,
+    ) -> Result<HashMap<String, Fingerprint>, Box<dyn Error>>;
     fn merge_commit(new_commit: &Commit<'_>) -> bool;
     fn is_identical_tree_to_any_parent(commit: &Commit<'_>) -> bool;
     fn is_trivial_merge_commit(&self, commit: &Commit<'_>) -> Result<bool, Box<dyn Error>>;
     fn is_head(&self, ref_name: &str) -> Result<bool, Box<dyn Error>>;
-    
-    fn verify_commit_signature(&self,commit: &Commit<'_>, fingerprints: &HashMap<String, Fingerprint>) -> Result<bool, Box<dyn Error>>;
-    
+
+    fn verify_commit_signature(
+        &self,
+        commit: &Commit<'_>,
+        fingerprints: &HashMap<String, Fingerprint>,
+    ) -> Result<bool, Box<dyn Error>>;
+
     fn read_config(&self) -> Result<Config, Box<dyn Error>> {
         let config_str = self.read_file(".capn")?;
         let config = Config::from_toml_string(&config_str)?;
@@ -39,7 +51,13 @@ pub trait Git: Sized {
         debug!(
             "CommitId: {}, Parent(s): {:?}, Author: {}, Committer: {}, Message: {}",
             commit.id(),
-            commit.parent_ids().fold("".to_string(), |acc, next| if acc.is_empty() { next.to_string() } else { format!("{},{}", acc, next) }),
+            commit
+                .parent_ids()
+                .fold("".to_string(), |acc, next| if acc.is_empty() {
+                    next.to_string()
+                } else {
+                    format!("{},{}", acc, next)
+                }),
             commit.author(),
             commit.committer(),
             commit.summary().unwrap_or("")
@@ -48,7 +66,7 @@ pub trait Git: Sized {
 }
 
 pub struct LiveGit {
-    repo: Repository
+    repo: Repository,
 }
 
 impl Git for LiveGit {
@@ -56,9 +74,9 @@ impl Git for LiveGit {
         let repo = Repository::discover("./")?;
         Ok(LiveGit { repo })
     }
-    
+
     fn read_file(&self, path: &str) -> Result<String, Box<dyn Error>> {
-        if let Some(working_dir) = self.repo.workdir()  {
+        if let Some(working_dir) = self.repo.workdir() {
             let mut read_file = File::open(working_dir.join(path))?;
             let mut current_contents = String::new();
             read_file.read_to_string(&mut current_contents)?;
@@ -68,16 +86,26 @@ impl Git for LiveGit {
             if let Some(blob) = obj.as_blob() {
                 match String::from_utf8(blob.content().to_vec()) {
                     Ok(config_str) => Ok(config_str),
-                    Err(e) => Err(Box::new(git2::Error::from_str(&format!("File is not UTF-8 encoded. {}", e))))
+                    Err(e) => Err(Box::new(git2::Error::from_str(&format!(
+                        "File is not UTF-8 encoded. {}",
+                        e
+                    )))),
                 }
             } else {
-                Err(Box::new(git2::Error::from_str("File path does not refer to a file")))
+                Err(Box::new(git2::Error::from_str(
+                    "File path does not refer to a file",
+                )))
             }
         }
     }
 
     #[cfg(windows)]
-    fn write_git_file(&self, path: &str, _file_mode: u32, contents: &str) -> Result<(), Box<dyn Error>> {
+    fn write_git_file(
+        &self,
+        path: &str,
+        _file_mode: u32,
+        contents: &str,
+    ) -> Result<(), Box<dyn Error>> {
         let dotgit_dir = self.repo.path();
         let mut file = File::create(dotgit_dir.join(path))?;
         file.write_all(contents.as_bytes())?;
@@ -86,7 +114,12 @@ impl Git for LiveGit {
     }
 
     #[cfg(unix)]
-    fn write_git_file(&self, path: &str, file_mode: u32, contents: &str) -> Result<(), Box<dyn Error>> {
+    fn write_git_file(
+        &self,
+        path: &str,
+        file_mode: u32,
+        contents: &str,
+    ) -> Result<(), Box<dyn Error>> {
         use std::os::unix::fs::PermissionsExt;
 
         let dotgit_dir = self.repo.path();
@@ -100,10 +133,10 @@ impl Git for LiveGit {
 
     fn current_branch(&self) -> Result<String, Box<dyn Error>> {
         let head = self.repo.head()?;
-        let head_name =  head.shorthand();
+        let head_name = head.shorthand();
         match head_name {
             Some(name) => Ok(name.to_string()),
-            None => Err(Box::new(git2::Error::from_str("No branch name found")))
+            None => Err(Box::new(git2::Error::from_str("No branch name found"))),
         }
     }
 
@@ -111,10 +144,16 @@ impl Git for LiveGit {
         Ok(self.repo.find_commit(commit_id)?)
     }
 
-    fn find_commit_fingerprints(&self, team_fingerprint_file: &str, commits: &Vec<Commit<'_>>) -> Result<HashMap<String, Fingerprint>, Box<dyn Error>> {
-        let mut team_fingerprints = Fingerprint::read_fingerprints::<LiveGit>(self, team_fingerprint_file)?;
+    fn find_commit_fingerprints(
+        &self,
+        team_fingerprint_file: &str,
+        commits: &Vec<Commit<'_>>,
+    ) -> Result<HashMap<String, Fingerprint>, Box<dyn Error>> {
+        let mut team_fingerprints =
+            Fingerprint::read_fingerprints::<LiveGit>(self, team_fingerprint_file)?;
 
-        let commit_emails = commits.iter()
+        let commit_emails = commits
+            .iter()
             .filter_map(|c| c.committer().email().map(|email| email.to_string()))
             .collect::<HashSet<String>>();
 
@@ -130,7 +169,8 @@ impl Git for LiveGit {
         revwalk.hide(from_id)?;
         revwalk.hide_head()?;
 
-        let commits = revwalk.into_iter()
+        let commits = revwalk
+            .into_iter()
             .map(|id| id.and_then(|id| self.repo.find_commit(id)))
             .collect::<Result<Vec<_>, git2::Error>>()?;
 
@@ -143,32 +183,43 @@ impl Git for LiveGit {
         let mut revwalk = self.repo.revwalk()?;
         revwalk.push(new_commit_id)?;
         revwalk.hide_head()?;
-        
-        let commits = revwalk.into_iter()
+
+        let commits = revwalk
+            .into_iter()
             .map(|id| id.and_then(|id| self.repo.find_commit(id)))
             .collect::<Result<Vec<_>, git2::Error>>()?;
 
         Ok(commits)
     }
 
-    fn verify_commit_signature(&self, commit: &Commit<'_>, fingerprints: &HashMap<String, Fingerprint>) -> Result<bool, Box<dyn Error>> {
+    fn verify_commit_signature(
+        &self,
+        commit: &Commit<'_>,
+        fingerprints: &HashMap<String, Fingerprint>,
+    ) -> Result<bool, Box<dyn Error>> {
         let commit_id = commit.id();
         let committer = commit.committer();
         let committer_email = match committer.email() {
             Some(email) => email,
             None => {
-                debug!("Commit {} does not have a valid committer: no email address", commit_id);
+                debug!(
+                    "Commit {} does not have a valid committer: no email address",
+                    commit_id
+                );
                 return Ok(false);
             }
         };
         let expected_fingerprint = match fingerprints.get(committer_email) {
             Some(f) => f,
             None => {
-                debug!("Did not find GPG key for commit {}, committer {}", commit_id, committer_email);
+                debug!(
+                    "Did not find GPG key for commit {}, committer {}",
+                    commit_id, committer_email
+                );
                 return Ok(false);
             }
         };
- 
+
         let repo_path = self.repo.path();
         let result = Command::new("git")
             .current_dir(repo_path)
@@ -176,11 +227,15 @@ impl Git for LiveGit {
             .arg("--raw")
             .arg(commit_id.to_string())
             .output()?;
-        debug!("Result from calling git verify-commit on {}: {:?}", commit_id, result);
+        debug!(
+            "Result from calling git verify-commit on {}: {:?}",
+            commit_id, result
+        );
 
         let encoded = String::from_utf8(result.stderr)?;
-        
-        let valid = encoded.split('\n')
+
+        let valid = encoded
+            .split('\n')
             .any(|s| s.contains(&format!("VALIDSIG {}", expected_fingerprint.id)));
 
         if valid {
@@ -204,22 +259,23 @@ impl Git for LiveGit {
 
     fn is_trivial_merge_commit(&self, commit: &Commit<'_>) -> Result<bool, Box<dyn Error>> {
         use git2::MergeOptions;
-        
+
         let temp_repo = TempRepo::new(commit.id())?;
         match &commit.parents().collect::<Vec<_>>()[..] {
             [a, b] => {
                 let expected_tree_id = commit.tree_id();
-                let reproduced_tree_id =  self.repo
+                let reproduced_tree_id = self
+                    .repo
                     .merge_commits(&a, &b, Some(MergeOptions::new().fail_on_conflict(true)))
                     .and_then(|mut index| index.write_tree_to(&temp_repo.repo));
                 let matches = reproduced_tree_id
                     .as_ref()
                     .map(|id| *id == expected_tree_id)
                     .unwrap_or(false);
-                
+
                 Ok(matches)
             }
-            _ => Ok(false)
+            _ => Ok(false),
         }
     }
 
@@ -231,17 +287,17 @@ impl Git for LiveGit {
     fn is_tag(&self, id: Oid) -> bool {
         match self.repo.find_tag(id) {
             Ok(_) => true,
-            _ => false
+            _ => false,
         }
     }
 }
 
 struct TempRepo {
-    repo: Repository
+    repo: Repository,
 }
 
 impl TempRepo {
-    fn new(commit_id: Oid) -> Result<TempRepo,Box<dyn Error>> {
+    fn new(commit_id: Oid) -> Result<TempRepo, Box<dyn Error>> {
         let max_attempts = 20;
         let tmp_dir = std::env::temp_dir();
 
@@ -251,13 +307,20 @@ impl TempRepo {
                 Err(ref e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
                 Err(e) => return Err(Box::new(e)),
                 Ok(_) => {
-                    trace!("Created temp repo for verification: {}", tmp_repo_path.display());
-                    return Ok(TempRepo{repo: Repository::init_bare(&tmp_repo_path)?})
+                    trace!(
+                        "Created temp repo for verification: {}",
+                        tmp_repo_path.display()
+                    );
+                    return Ok(TempRepo {
+                        repo: Repository::init_bare(&tmp_repo_path)?,
+                    });
                 }
             };
         }
 
-        Err(Box::new(CapnError::new(String::from("Max attempts exceeded looking for a new temp repo location"))))
+        Err(Box::new(CapnError::new(String::from(
+            "Max attempts exceeded looking for a new temp repo location",
+        ))))
     }
 }
 

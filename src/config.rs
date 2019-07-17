@@ -1,11 +1,10 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use toml;
-
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct Config {
     pub prepend_branch_name: Option<Unit>,
-    pub verify_git_commits: Option<VerifyGitCommitsConfig>
+    pub verify_git_commits: Option<VerifyGitCommitsConfig>,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -22,9 +21,9 @@ pub struct VerifyGitCommitsConfig {
     pub verify_email_addresses: bool,
     #[serde(default = "default_true")]
     pub verify_commit_signatures: bool,
-    
+
     #[serde(default = "default_false")]
-    pub verify_different_authors: bool
+    pub verify_different_authors: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -37,7 +36,6 @@ fn default_true() -> bool {
 fn default_false() -> bool {
     false
 }
-
 
 impl Config {
     pub fn from_toml_string(input: &str) -> Result<Config, toml::de::Error> {

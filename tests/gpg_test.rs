@@ -13,7 +13,7 @@ fn call_for_fingerprints_completes_successfully() {
 fn receive_keys() {
     let mut fingerprints = HashSet::new();
     fingerprints.insert("1212121212121212112".to_string());
-    let result = LiveGpg::receive_keys("keyserver",&fingerprints);
+    let result = LiveGpg::receive_keys("keyserver", &fingerprints);
     println!("Status {:?}", result);
     assert!(result.is_ok());
 }
