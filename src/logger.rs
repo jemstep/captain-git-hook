@@ -26,7 +26,10 @@ pub struct LoggingOpt {
     pub ip: Option<String>,
     /// Username for logging context
     #[structopt(long = "user")]
-    pub user: Option<String>
+    pub user: Option<String>,
+    /// Repository name for logging context
+    #[structopt(long = "repo")]
+    pub repo: Option<String>,
 }
 
 pub struct Logger {
@@ -43,24 +46,22 @@ impl Log for Logger {
         if !self.enabled(record.metadata()) {
             return;
         }
-
-        let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S");
-
+        
         eprintln!("{}", record.args());
-
-        let message = LogMessage {
-            timestamp: timestamp.to_string(),
-            level: record.level(),
-            context: self.context.clone(),
-            message: format!("{}", record.args())
-        };
 
         self.tcp_stream.as_ref().map(|ref stream| {
             stream.lock()
                 .map_err(|e| e.to_string())
                 .and_then(|mut stream| {
-                    serde_json::to_writer_pretty(&(*stream), &message).map_err(|e| e.to_string())?;
-                    stream.write(b"\n").map(|_| ()).map_err(|e| e.to_string())
+                    let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S");
+                    let message = LogMessage {
+                        timestamp: timestamp.to_string(),
+                        level: record.level(),
+                        context: self.context.clone(),
+                        message: format!("{}", record.args())
+                    };
+                    let message_json = serde_json::to_string(&message).map_err(|e| e.to_string())?;
+                    writeln!(stream, "{}", message_json).map_err(|e| e.to_string())
                 })
                 .unwrap_or_else(|e| eprintln!("Error: Failed to log over TCP - {}", e));
         });
@@ -87,12 +88,13 @@ impl Logger {
             (false, 1) => LevelFilter::Debug,
             (false, _) => LevelFilter::Trace,
         };
-    
+        
         log::set_max_level(log_level);
         let context = LoggingContext {
             run_id: Uuid::new_v4(),
             user_id: opt.user,
-            user_ip: opt.ip
+            user_ip: opt.ip,
+            repo: opt.repo
         };
         
         let tcp_stream = opt.log_url
@@ -112,6 +114,17 @@ impl Logger {
         if log_set_result.is_err() {
             eprintln!("Error: Logger initialized twice!");
         }
+    }
+
+    pub fn test_init() {
+        Logger::init(LoggingOpt {
+            quiet: false,
+            verbose: 2,
+            log_url: None,
+            user: None,
+            ip: None,
+            repo: None
+        });
     }
 }
 
@@ -134,6 +147,10 @@ struct LogMessage {
 #[derive(Serialize, Clone)]
 pub struct LoggingContext {
     run_id: Uuid,
+    #[serde(skip_serializing_if = "Option::is_none")]
     user_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     user_ip: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    repo: Option<String>
 }

@@ -5,7 +5,7 @@ use capn;
 use capn::git::LiveGit;
 use capn::gpg::LiveGpg;
 
-use capn::logger::{Logger, LoggingOpt};
+use capn::logger::Logger;
 
 use std::process::*;
 
@@ -22,13 +22,7 @@ fn before_all() {
 }
 
 fn init_logging() {
-    Logger::init(LoggingOpt {
-        quiet: false,
-        verbose: 2,
-        log_url: None,
-        user: None,
-        ip: None
-    });
+    Logger::test_init();
 }
 
 fn set_current_dir_to_test_repo() {
