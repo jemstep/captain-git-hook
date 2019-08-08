@@ -11,6 +11,7 @@ use std::fmt;
 use std::iter;
 use std::path::PathBuf;
 use std::time::Instant;
+use rayon::prelude::*;
 
 use log::*;
 
@@ -175,12 +176,47 @@ fn verify_commit_signatures<G: Git>(
     commits: &Vec<Commit<'_>>,
     fingerprints: &HashMap<String, Fingerprint>,
 ) -> Result<PolicyResult, Box<dyn Error>> {
+
+    //hashmap of VerificationCommit
+    let verification_commits: HashMap<_, _> =  commits.iter()
+        .map(|commit| {
+            let committer = commit.committer();
+            let committer_email = committer.email().map(|s| s.to_string()) ;
+            let fingerprint = committer_email.clone().and_then(|s| fingerprints.get(&s).map(|f| f.id.to_string()));
+            (commit.id().to_string(), 
+            VerificationCommit {
+                id : commit.id().to_string(),
+                email: committer_email,
+                is_identical_tree: G::is_identical_tree_to_any_parent(commit),
+                valid_signature: false,
+                fingerprint: fingerprint
+            } )
+    }).collect();
+
+    //let repo = Repository::discover("./")?;
+    let repo_path = git.path();
+
+    //verify commit signature in parallel
+    let checked_verification_commits:HashMap<_,_> =  verification_commits.par_iter().map(|(_k, v)|{
+            let valid_signature = G::verify_commit_signature2(repo_path, v);
+            (v.id.to_string(), 
+            VerificationCommit {
+                id : v.id.to_string(),
+                email: v.email.clone().map(|s| s.to_string()),
+                is_identical_tree: v.is_identical_tree,
+                valid_signature: valid_signature.unwrap_or(false),
+                fingerprint: v.fingerprint.clone().map(|s| s.to_string()),
+            } )
+    }).collect();
+
+    //check and return PolicyResults
     commits.iter()
         .map(|commit| {
-            if G::is_identical_tree_to_any_parent(commit) {
+            let verification_commit = checked_verification_commits.get(&commit.id().to_string()).unwrap();
+            if verification_commit.is_identical_tree {
                 info!("Signature verification passed for {}: verified identical to one of its parents, no signature required", commit.id());
                 Ok(PolicyResult::Ok)
-            } else if git.verify_commit_signature(commit, fingerprints)? {
+            } else if verification_commit.valid_signature {
                 info!("Signature verification passed for {}: verified with a valid signature", commit.id());
                 Ok(PolicyResult::Ok)
             } else if git.is_trivial_merge_commit(commit)? {
