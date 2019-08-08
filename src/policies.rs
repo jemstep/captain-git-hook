@@ -177,7 +177,7 @@ fn verify_commit_signatures<G: Git>(
     fingerprints: &HashMap<String, Fingerprint>,
 ) -> Result<PolicyResult, Box<dyn Error>> {
 
-    //hashmap of VerificationCommit
+    //hashmap of VerificationCommits
     let verification_commits: HashMap<_, _> =  commits.iter()
         .map(|commit| {
             let committer = commit.committer();
@@ -193,12 +193,11 @@ fn verify_commit_signatures<G: Git>(
             } )
     }).collect();
 
-    //let repo = Repository::discover("./")?;
     let repo_path = git.path();
 
-    //verify commit signature in parallel
+    //verify commit signatures in parallel
     let checked_verification_commits:HashMap<_,_> =  verification_commits.par_iter().map(|(_k, v)|{
-            let valid_signature = G::verify_commit_signature2(repo_path, v);
+            let valid_signature = G::verify_commit_signature(repo_path, v);
             (v.id.to_string(), 
             VerificationCommit {
                 id : v.id.to_string(),

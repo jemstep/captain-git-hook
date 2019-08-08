@@ -43,17 +43,12 @@ pub trait Git: Sized {
     fn is_trivial_merge_commit(&self, commit: &Commit<'_>) -> Result<bool, Box<dyn Error>>;
     fn is_head(&self, ref_name: &str) -> Result<bool, Box<dyn Error>>;
     fn path(&self) -> &std::path::Path;
-    fn verify_commit_signature(
-        &self,
-        commit: &Commit<'_>,
-        fingerprints: &HashMap<String, Fingerprint>,
-    ) -> Result<bool, Box<dyn Error>>;
-fn verify_commit_signature2(path: &std::path::Path, commit: &VerificationCommit) -> Result<bool, Box<dyn Error>>;
-    fn read_config(&self) -> Result<Config, Box<dyn Error>> {
-        let config_str = self.read_file(".capn")?;
-        let config = Config::from_toml_string(&config_str)?;
-        Ok(config)
-    }
+    fn verify_commit_signature(path: &std::path::Path, commit: &VerificationCommit) -> Result<bool, Box<dyn Error>>;
+        fn read_config(&self) -> Result<Config, Box<dyn Error>> {
+            let config_str = self.read_file(".capn")?;
+            let config = Config::from_toml_string(&config_str)?;
+            Ok(config)
+        }
 
     fn debug_commit(commit: &Commit<'_>) {
         debug!(
@@ -205,61 +200,6 @@ impl Git for LiveGit {
     }
 
     fn verify_commit_signature(
-        &self,
-        commit: &Commit<'_>,
-        fingerprints: &HashMap<String, Fingerprint>,
-    ) -> Result<bool, Box<dyn Error>> {
-        let commit_id = commit.id();
-        let committer = commit.committer();
-        let committer_email = match committer.email() {
-            Some(email) => email,
-            None => {
-                debug!(
-                    "Commit {} does not have a valid committer: no email address",
-                    commit_id
-                );
-                return Ok(false);
-            }
-        };
-        let expected_fingerprint = match fingerprints.get(committer_email) {
-            Some(f) => f,
-            None => {
-                debug!(
-                    "Did not find GPG key for commit {}, committer {}",
-                    commit_id, committer_email
-                );
-                return Ok(false);
-            }
-        };
-
-        let repo_path = self.repo.path();
-        let result = Command::new("git")
-            .current_dir(repo_path)
-            .arg("verify-commit")
-            .arg("--raw")
-            .arg(commit_id.to_string())
-            .output()?;
-        debug!(
-            "Result from calling git verify-commit on {}: {:?}",
-            commit_id, result
-        );
-
-        let encoded = String::from_utf8(result.stderr)?;
-
-        let valid = encoded
-            .split('\n')
-            .any(|s| s.contains(&format!("VALIDSIG {}", expected_fingerprint.id)));
-
-        if valid {
-            debug!("Commit {} was signed with a valid signature", commit_id);
-            Ok(true)
-        } else {
-            debug!("Commit {} was not signed with a valid signature", commit_id);
-            Ok(false)
-        }
-    }
-
-        fn verify_commit_signature2(
         path: &std::path::Path,
         commit: &VerificationCommit
     ) -> Result<bool, Box<dyn Error>> {
@@ -286,7 +226,6 @@ impl Git for LiveGit {
             }
         };
 
-        //let repo_path = self.repo.path();
         let result = Command::new("git")
             .current_dir(path)
             .arg("verify-commit")
