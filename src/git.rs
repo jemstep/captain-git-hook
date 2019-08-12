@@ -16,7 +16,7 @@ pub struct VerificationCommit {
     pub email: Option<String>,
     pub is_identical_tree: bool,
     pub valid_signature: bool,
-    pub fingerprint: Option<String>
+    pub fingerprint: Option<String>,
 }
 
 pub trait Git: Sized {
@@ -43,12 +43,15 @@ pub trait Git: Sized {
     fn is_trivial_merge_commit(&self, commit: &Commit<'_>) -> Result<bool, Box<dyn Error>>;
     fn is_head(&self, ref_name: &str) -> Result<bool, Box<dyn Error>>;
     fn path(&self) -> &std::path::Path;
-    fn verify_commit_signature(path: &std::path::Path, commit: &VerificationCommit) -> Result<bool, Box<dyn Error>>;
-        fn read_config(&self) -> Result<Config, Box<dyn Error>> {
-            let config_str = self.read_file(".capn")?;
-            let config = Config::from_toml_string(&config_str)?;
-            Ok(config)
-        }
+    fn verify_commit_signature(
+        path: &std::path::Path,
+        commit: &VerificationCommit,
+    ) -> Result<bool, Box<dyn Error>>;
+    fn read_config(&self) -> Result<Config, Box<dyn Error>> {
+        let config_str = self.read_file(".capn")?;
+        let config = Config::from_toml_string(&config_str)?;
+        Ok(config)
+    }
 
     fn debug_commit(commit: &Commit<'_>) {
         debug!(
@@ -201,10 +204,10 @@ impl Git for LiveGit {
 
     fn verify_commit_signature(
         path: &std::path::Path,
-        commit: &VerificationCommit
+        commit: &VerificationCommit,
     ) -> Result<bool, Box<dyn Error>> {
         let commit_id = &commit.id;
-       
+
         let committer_email = match &commit.email {
             Some(email) => email,
             None => {
