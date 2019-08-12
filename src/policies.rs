@@ -176,6 +176,50 @@ fn verify_commit_signatures<G: Git>(
     commits: &Vec<Commit<'_>>,
     fingerprints: &HashMap<String, Fingerprint>,
 ) -> Result<PolicyResult, Box<dyn Error>> {
+    let verification_commits: HashMap<String, VerificationCommit> =
+        generate_verification_commits(git, commits, fingerprints);
+
+    commits.iter()
+        .map(|commit| {
+            let verification_commit = verification_commits.get(&commit.id().to_string());
+            match verification_commit {
+                Some(vc) => {
+                    if vc.is_identical_tree {
+                        info!("Signature verification passed for {}: verified identical to one of its parents, no signature required", commit.id());
+                        Ok(PolicyResult::Ok)
+                    } else if vc.valid_signature {
+                        info!("Signature verification passed for {}: verified with a valid signature", commit.id());
+                        Ok(PolicyResult::Ok)
+                    } else if git.is_trivial_merge_commit(commit)? {
+                        info!("Signature verification passed for {}: verified to be a trivial merge of its parents, no signature required", commit.id());
+                        Ok(PolicyResult::Ok)
+                    }  else {
+                        error!("Signature verification failed for {}", commit.id());
+                        if G::merge_commit(&commit) {
+                            Ok(PolicyResult::UnsignedMergeCommit(commit.id()))
+                        } else {
+                            Ok(PolicyResult::UnsignedCommit(commit.id()))
+                        }
+                    }
+                },
+                None => {
+                    error!("Signature verification failed for {}, verification commit not found", commit.id());
+                    if G::merge_commit(&commit) {
+                        Ok(PolicyResult::UnsignedMergeCommit(commit.id()))
+                    } else {
+                        Ok(PolicyResult::UnsignedCommit(commit.id()))
+                    }
+                }
+            }
+        })
+        .collect()
+}
+
+fn generate_verification_commits<G: Git>(
+    git: &G,
+    commits: &Vec<Commit<'_>>,
+    fingerprints: &HashMap<String, Fingerprint>,
+) -> HashMap<String, VerificationCommit> {
     let verification_commits: HashMap<String, VerificationCommit> = commits
         .iter()
         .map(|commit| {
@@ -199,13 +243,12 @@ fn verify_commit_signatures<G: Git>(
 
     let repo_path = git.path();
 
-    //verify commit signatures in parallel
     let checked_verification_commits: HashMap<String, VerificationCommit> = verification_commits
         .into_par_iter()
-        .map(|(_k, v)| {
+        .map(|(k, v)| {
             let valid_signature = G::verify_commit_signature(repo_path, &v);
             (
-                v.id.to_string(),
+                k,
                 VerificationCommit {
                     valid_signature: valid_signature.unwrap_or(false),
                     ..v
@@ -213,30 +256,7 @@ fn verify_commit_signatures<G: Git>(
             )
         })
         .collect();
-
-    //check and return PolicyResults
-    commits.iter()
-        .map(|commit| {
-            let verification_commit = checked_verification_commits.get(&commit.id().to_string()).unwrap();
-            if verification_commit.is_identical_tree {
-                info!("Signature verification passed for {}: verified identical to one of its parents, no signature required", commit.id());
-                Ok(PolicyResult::Ok)
-            } else if verification_commit.valid_signature {
-                info!("Signature verification passed for {}: verified with a valid signature", commit.id());
-                Ok(PolicyResult::Ok)
-            } else if git.is_trivial_merge_commit(commit)? {
-                info!("Signature verification passed for {}: verified to be a trivial merge of its parents, no signature required", commit.id());
-                Ok(PolicyResult::Ok)
-            }  else {
-                error!("Signature verification failed for {}", commit.id());
-                if G::merge_commit(&commit) {
-                    Ok(PolicyResult::UnsignedMergeCommit(commit.id()))
-                } else {
-                    Ok(PolicyResult::UnsignedCommit(commit.id()))
-                }
-            }
-        })
-        .collect()
+    checked_verification_commits
 }
 
 fn verify_different_authors<G: Git>(
