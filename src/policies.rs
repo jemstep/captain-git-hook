@@ -202,17 +202,14 @@ fn verify_commit_signatures<G: Git>(
 
     //verify commit signatures in parallel
     let checked_verification_commits: HashMap<_, _> = verification_commits
-        .par_iter()
+        .into_par_iter()
         .map(|(_k, v)| {
-            let valid_signature = G::verify_commit_signature(repo_path, v);
+            let valid_signature = G::verify_commit_signature(repo_path, &v);
             (
                 v.id.to_string(),
                 VerificationCommit {
-                    id: v.id.to_string(),
-                    committer_email: v.committer_email.clone().map(|s| s.to_string()),
-                    is_identical_tree: v.is_identical_tree,
                     valid_signature: valid_signature.unwrap_or(false),
-                    fingerprint: v.fingerprint.clone().map(|s| s.to_string()),
+                    ..v
                 },
             )
         })
