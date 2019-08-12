@@ -189,7 +189,7 @@ fn verify_commit_signatures<G: Git>(
                 commit.id().to_string(),
                 VerificationCommit {
                     id: commit.id().to_string(),
-                    email: committer_email,
+                    committer_email: committer_email,
                     is_identical_tree: G::is_identical_tree_to_any_parent(commit),
                     valid_signature: false,
                     fingerprint: fingerprint,
@@ -209,7 +209,7 @@ fn verify_commit_signatures<G: Git>(
                 v.id.to_string(),
                 VerificationCommit {
                     id: v.id.to_string(),
-                    email: v.email.clone().map(|s| s.to_string()),
+                    committer_email: v.committer_email.clone().map(|s| s.to_string()),
                     is_identical_tree: v.is_identical_tree,
                     valid_signature: valid_signature.unwrap_or(false),
                     fingerprint: v.fingerprint.clone().map(|s| s.to_string()),

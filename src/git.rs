@@ -13,7 +13,7 @@ use log::*;
 
 pub struct VerificationCommit {
     pub id: String,
-    pub email: Option<String>,
+    pub committer_email: Option<String>,
     pub is_identical_tree: bool,
     pub valid_signature: bool,
     pub fingerprint: Option<String>,
@@ -208,7 +208,7 @@ impl Git for LiveGit {
     ) -> Result<bool, Box<dyn Error>> {
         let commit_id = &commit.id;
 
-        let committer_email = match &commit.email {
+        let committer_email = match &commit.committer_email {
             Some(email) => email,
             None => {
                 debug!(
