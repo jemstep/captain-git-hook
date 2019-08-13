@@ -11,6 +11,14 @@ use std::str;
 use crate::config::*;
 use log::*;
 
+pub struct VerificationCommit {
+    pub id: String,
+    pub committer_email: Option<String>,
+    pub is_identical_tree: bool,
+    pub valid_signature: bool,
+    pub fingerprint: Option<String>,
+}
+
 pub trait Git: Sized {
     fn new() -> Result<Self, Box<dyn Error>>;
     fn read_file(&self, path: &str) -> Result<String, Box<dyn Error>>;
@@ -34,13 +42,11 @@ pub trait Git: Sized {
     fn is_identical_tree_to_any_parent(commit: &Commit<'_>) -> bool;
     fn is_trivial_merge_commit(&self, commit: &Commit<'_>) -> Result<bool, Box<dyn Error>>;
     fn is_head(&self, ref_name: &str) -> Result<bool, Box<dyn Error>>;
-
+    fn path(&self) -> &std::path::Path;
     fn verify_commit_signature(
-        &self,
-        commit: &Commit<'_>,
-        fingerprints: &HashMap<String, Fingerprint>,
+        path: &std::path::Path,
+        commit: &VerificationCommit,
     ) -> Result<bool, Box<dyn Error>>;
-
     fn read_config(&self) -> Result<Config, Box<dyn Error>> {
         let config_str = self.read_file(".capn")?;
         let config = Config::from_toml_string(&config_str)?;
@@ -73,6 +79,10 @@ impl Git for LiveGit {
     fn new() -> Result<Self, Box<dyn Error>> {
         let repo = Repository::discover("./")?;
         Ok(LiveGit { repo })
+    }
+
+    fn path(&self) -> &std::path::Path {
+        self.repo.path()
     }
 
     fn read_file(&self, path: &str) -> Result<String, Box<dyn Error>> {
@@ -193,13 +203,12 @@ impl Git for LiveGit {
     }
 
     fn verify_commit_signature(
-        &self,
-        commit: &Commit<'_>,
-        fingerprints: &HashMap<String, Fingerprint>,
+        path: &std::path::Path,
+        commit: &VerificationCommit,
     ) -> Result<bool, Box<dyn Error>> {
-        let commit_id = commit.id();
-        let committer = commit.committer();
-        let committer_email = match committer.email() {
+        let commit_id = &commit.id;
+
+        let committer_email = match &commit.committer_email {
             Some(email) => email,
             None => {
                 debug!(
@@ -209,7 +218,7 @@ impl Git for LiveGit {
                 return Ok(false);
             }
         };
-        let expected_fingerprint = match fingerprints.get(committer_email) {
+        let expected_fingerprint = match &commit.fingerprint {
             Some(f) => f,
             None => {
                 debug!(
@@ -220,9 +229,8 @@ impl Git for LiveGit {
             }
         };
 
-        let repo_path = self.repo.path();
         let result = Command::new("git")
-            .current_dir(repo_path)
+            .current_dir(path)
             .arg("verify-commit")
             .arg("--raw")
             .arg(commit_id.to_string())
@@ -236,7 +244,7 @@ impl Git for LiveGit {
 
         let valid = encoded
             .split('\n')
-            .any(|s| s.contains(&format!("VALIDSIG {}", expected_fingerprint.id)));
+            .any(|s| s.contains(&format!("VALIDSIG {}", expected_fingerprint)));
 
         if valid {
             debug!("Commit {} was signed with a valid signature", commit_id);

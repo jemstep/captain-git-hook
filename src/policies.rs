@@ -5,6 +5,7 @@ use crate::git::*;
 use crate::gpg::*;
 
 use git2::{Commit, Oid};
+use rayon::prelude::*;
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::fmt;
@@ -175,27 +176,87 @@ fn verify_commit_signatures<G: Git>(
     commits: &Vec<Commit<'_>>,
     fingerprints: &HashMap<String, Fingerprint>,
 ) -> Result<PolicyResult, Box<dyn Error>> {
+    let verification_commits: HashMap<String, VerificationCommit> =
+        generate_verification_commits(git, commits, fingerprints);
+
     commits.iter()
         .map(|commit| {
-            if G::is_identical_tree_to_any_parent(commit) {
-                info!("Signature verification passed for {}: verified identical to one of its parents, no signature required", commit.id());
-                Ok(PolicyResult::Ok)
-            } else if git.verify_commit_signature(commit, fingerprints)? {
-                info!("Signature verification passed for {}: verified with a valid signature", commit.id());
-                Ok(PolicyResult::Ok)
-            } else if git.is_trivial_merge_commit(commit)? {
-                info!("Signature verification passed for {}: verified to be a trivial merge of its parents, no signature required", commit.id());
-                Ok(PolicyResult::Ok)
-            }  else {
-                error!("Signature verification failed for {}", commit.id());
-                if G::merge_commit(&commit) {
-                    Ok(PolicyResult::UnsignedMergeCommit(commit.id()))
-                } else {
-                    Ok(PolicyResult::UnsignedCommit(commit.id()))
+            let verification_commit = verification_commits.get(&commit.id().to_string());
+            match verification_commit {
+                Some(vc) => {
+                    if vc.is_identical_tree {
+                        info!("Signature verification passed for {}: verified identical to one of its parents, no signature required", commit.id());
+                        Ok(PolicyResult::Ok)
+                    } else if vc.valid_signature {
+                        info!("Signature verification passed for {}: verified with a valid signature", commit.id());
+                        Ok(PolicyResult::Ok)
+                    } else if git.is_trivial_merge_commit(commit)? {
+                        info!("Signature verification passed for {}: verified to be a trivial merge of its parents, no signature required", commit.id());
+                        Ok(PolicyResult::Ok)
+                    }  else {
+                        error!("Signature verification failed for {}", commit.id());
+                        if G::merge_commit(&commit) {
+                            Ok(PolicyResult::UnsignedMergeCommit(commit.id()))
+                        } else {
+                            Ok(PolicyResult::UnsignedCommit(commit.id()))
+                        }
+                    }
+                },
+                None => {
+                    error!("Signature verification failed for {}, verification commit not found", commit.id());
+                    if G::merge_commit(&commit) {
+                        Ok(PolicyResult::UnsignedMergeCommit(commit.id()))
+                    } else {
+                        Ok(PolicyResult::UnsignedCommit(commit.id()))
+                    }
                 }
             }
         })
         .collect()
+}
+
+fn generate_verification_commits<G: Git>(
+    git: &G,
+    commits: &Vec<Commit<'_>>,
+    fingerprints: &HashMap<String, Fingerprint>,
+) -> HashMap<String, VerificationCommit> {
+    let verification_commits: HashMap<String, VerificationCommit> = commits
+        .iter()
+        .map(|commit| {
+            let committer = commit.committer();
+            let committer_email = committer.email().map(|s| s.to_string());
+            let fingerprint = committer_email
+                .clone()
+                .and_then(|s| fingerprints.get(&s).map(|f| f.id.to_string()));
+            (
+                commit.id().to_string(),
+                VerificationCommit {
+                    id: commit.id().to_string(),
+                    committer_email: committer_email,
+                    is_identical_tree: G::is_identical_tree_to_any_parent(commit),
+                    valid_signature: false,
+                    fingerprint: fingerprint,
+                },
+            )
+        })
+        .collect();
+
+    let repo_path = git.path();
+
+    let checked_verification_commits: HashMap<String, VerificationCommit> = verification_commits
+        .into_par_iter()
+        .map(|(k, v)| {
+            let valid_signature = G::verify_commit_signature(repo_path, &v);
+            (
+                k,
+                VerificationCommit {
+                    valid_signature: valid_signature.unwrap_or(false),
+                    ..v
+                },
+            )
+        })
+        .collect();
+    checked_verification_commits
 }
 
 fn verify_different_authors<G: Git>(
