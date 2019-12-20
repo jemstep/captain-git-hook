@@ -19,6 +19,12 @@ pub struct VerificationCommit {
     pub fingerprint: Option<String>,
 }
 
+pub struct Tag {
+    pub id: String,
+    pub tagger_email: Option<String>,
+    pub fingerprint: Option<String>,
+}
+
 pub trait Git: Sized {
     fn new() -> Result<Self, Box<dyn Error>>;
     fn read_file(&self, path: &str) -> Result<String, Box<dyn Error>>;
@@ -47,6 +53,7 @@ pub trait Git: Sized {
         path: &std::path::Path,
         commit: &VerificationCommit,
     ) -> Result<bool, Box<dyn Error>>;
+    fn verify_tag_signature(path: &std::path::Path, tag: &Tag) -> Result<bool, Box<dyn Error>>;
     fn read_config(&self) -> Result<Config, Box<dyn Error>> {
         let config_str = self.read_file(".capn")?;
         let config = Config::from_toml_string(&config_str)?;
@@ -200,6 +207,56 @@ impl Git for LiveGit {
             .collect::<Result<Vec<_>, git2::Error>>()?;
 
         Ok(commits)
+    }
+
+    fn verify_tag_signature(path: &std::path::Path, tag: &Tag) -> Result<bool, Box<dyn Error>> {
+        let tag_id = &tag.id;
+
+        let tagger_email = match &tag.tagger_email {
+            Some(email) => email,
+            None => {
+                debug!(
+                    "Tag {} does not have a valid tagger: no email address",
+                    tag_id
+                );
+                return Ok(false);
+            }
+        };
+        let expected_fingerprint = match &tag.fingerprint {
+            Some(f) => f,
+            None => {
+                debug!(
+                    "Did not find GPG key for tag {}, tagger {}",
+                    tag_id, tagger_email
+                );
+                return Ok(false);
+            }
+        };
+
+        let result = Command::new("git")
+            .current_dir(path)
+            .arg("verify-tag")
+            .arg("--raw")
+            .arg(tag_id.to_string())
+            .output()?;
+        debug!(
+            "Result from calling git verify-tag on {}: {:?}",
+            tag_id, result
+        );
+
+        let encoded = String::from_utf8(result.stderr)?;
+
+        let valid = encoded
+            .split('\n')
+            .any(|s| s.contains(&format!("VALIDSIG {}", expected_fingerprint)));
+
+        if valid {
+            debug!("Tag {} was signed with a valid signature", tag_id);
+            Ok(true)
+        } else {
+            debug!("Tag {} was not signed with a valid signature", tag_id);
+            Ok(false)
+        }
     }
 
     fn verify_commit_signature(
