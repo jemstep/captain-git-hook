@@ -17,6 +17,7 @@ pub struct VerificationCommit {
     pub is_identical_tree: bool,
     pub valid_signature: bool,
     pub fingerprint: Option<String>,
+    pub tags: Vec<Tag>,
 }
 
 pub struct Tag {

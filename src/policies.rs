@@ -101,6 +101,7 @@ pub fn verify_git_commits<G: Git, P: Gpg>(
         debug!("Tag detected, no commits to verify.")
     } else {
         let commits = commits_to_verify(&git, old_commit_id, new_commit_id)?;
+        // TODO: Find 2 tags in this range and update commits (NB: Start from tip)
 
         debug!("Number of commits to verify {} : ", commits.len());
         for commit in &commits {
@@ -220,6 +221,9 @@ fn generate_verification_commits<G: Git>(
     commits: &Vec<Commit<'_>>,
     fingerprints: &HashMap<String, Fingerprint>,
 ) -> HashMap<String, VerificationCommit> {
+    // TODO: tags: repo.tag_names -> repo.revparse_single -> object.peel_to_tag -> tag.peel -> object.kind == commit && object.commit = commit.id()
+    // Can we configure a prefix for the tag?
+    // Can we somehow limit the tags further on this level? There may be many...
     let verification_commits: HashMap<String, VerificationCommit> = commits
         .iter()
         .map(|commit| {
@@ -236,6 +240,7 @@ fn generate_verification_commits<G: Git>(
                     is_identical_tree: G::is_identical_tree_to_any_parent(commit),
                     valid_signature: false,
                     fingerprint: fingerprint,
+                    tags: Vec::new(), // TODO
                 },
             )
         })

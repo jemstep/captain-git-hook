@@ -68,6 +68,7 @@ impl Gpg for LiveGpg {
         key_server: &str,
         fingerprints: &HashSet<String>,
     ) -> Result<(), Box<dyn Error>> {
+        // TODO: log the stdout and stderr
         let result = Command::new("gpg")
             .args(&["--keyserver", key_server])
             .arg("--recv-keys")

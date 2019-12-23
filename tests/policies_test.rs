@@ -55,6 +55,8 @@ fn verify_commits_config() -> VerifyGitCommitsConfig {
         verify_email_addresses: true,
         verify_commit_signatures: true,
         verify_different_authors: true,
+        override_tag_prefix: "capn-override-".to_string(),
+        override_tags_required: 1,
     }
 }
 
@@ -243,4 +245,17 @@ fn verify_git_commits_author_merged_own_code_on_head() {
     )
     .unwrap();
     assert!(result.is_err());
+}
+
+#[test]
+fn verify_tagged_git_commits_override_rules() {
+    before_all();
+    let result = policies::verify_git_commits::<LiveGit, LiveGpg>(
+        &verify_commits_config(),
+        "7f9763e189ade34345e683ab7e0c22d164280452",
+        "6f00838625cd1b7dc0acc66e43fee5594f0f124c",
+        "refs/heads/master",
+    )
+    .unwrap();
+    assert!(result.is_ok(), "Error: {:?}", result);
 }
