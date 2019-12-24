@@ -7,6 +7,7 @@ pub struct Fingerprint {
     pub id: String,
     pub name: String,
     pub email: String,
+    pub pubkey_downloaded: bool,
 }
 
 impl Fingerprint {
@@ -28,6 +29,7 @@ impl Fingerprint {
                                 id: fingerprint,
                                 name: name.to_string(),
                                 email: email.to_string(),
+                                pubkey_downloaded: false,
                             },
                         ));
                     }

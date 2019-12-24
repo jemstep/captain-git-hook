@@ -28,7 +28,7 @@ pub struct VerifyGitCommitsConfig {
     #[serde(default)]
     pub override_tag_prefix: String,
     #[serde(default = "default_two")]
-    pub override_tags_required: u32,
+    pub override_tags_required: u8,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -42,7 +42,7 @@ fn default_false() -> bool {
     false
 }
 
-fn default_two() -> u32 {
+fn default_two() -> u8 {
     2
 }
 
