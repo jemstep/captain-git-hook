@@ -104,15 +104,16 @@ pub fn verify_git_commits<G: Git, P: Gpg>(
         let commits = commits_to_verify(&git, old_commit_id, new_commit_id)?;
 
         debug!("Number of commits to verify {} : ", commits.len());
-        // for commit in &commits {
-        //     G::debug_commit(&commit) // TODO
-        // }
+        for commit in &commits {
+            debug!("{:?}", commit);
+        }
 
         let mut keyring =
             Keyring::from_team_fingerprints_file(git.read_file(&config.team_fingerprints_file)?);
 
         let exclusions = find_and_verify_override_tags(
             &git,
+            &gpg,
             &commits,
             config.override_tags_required,
             &mut keyring,
@@ -120,13 +121,14 @@ pub fn verify_git_commits<G: Git, P: Gpg>(
         let commits =
             commits_to_verify_with_exclusions(&git, old_commit_id, new_commit_id, exclusions)?;
 
-        // TODO: This block needs to be moved into gpg, and called by whoever needs it
-        let fingerprint_ids = keyring
-            .fingerprints
-            .values()
-            .map(|f| f.id.clone())
-            .collect();
-        gpg.receive_keys(&fingerprint_ids)?;
+        gpg.receive_keys(
+            &mut keyring,
+            &commits
+                .iter()
+                .filter_map(|c| c.committer_email.as_ref())
+                .cloned()
+                .collect(),
+        )?;
 
         if config.verify_email_addresses {
             policy_result = policy_result.and(verify_email_addresses(
@@ -165,7 +167,6 @@ fn commits_to_verify<'a, G: Git>(
     old_commit_id: Oid,
     new_commit_id: Oid,
 ) -> Result<Vec<VerificationCommit>, Box<dyn Error>> {
-    // TODO fingerprints
     git.find_verification_commits(&[old_commit_id], &[new_commit_id])
 }
 
@@ -175,24 +176,52 @@ fn commits_to_verify_with_exclusions<'a, G: Git>(
     new_commit_id: Oid,
     mut exclusions: Vec<Oid>,
 ) -> Result<Vec<VerificationCommit>, Box<dyn Error>> {
-    // TODO fingerprints
     exclusions.push(old_commit_id);
     git.find_verification_commits(&exclusions, &[new_commit_id])
 }
 
-fn find_and_verify_override_tags<G: Git>(
-    _git: &G,
+fn find_and_verify_override_tags<G: Git, P: Gpg>(
+    git: &G,
+    gpg: &P,
     commits: &Vec<VerificationCommit>,
     required_tags: u8,
-    _keyring: &mut Keyring,
+    keyring: &mut Keyring,
 ) -> Result<Vec<Oid>, Box<dyn Error>> {
-    // TODO: fetch keys
+    let repo_path = git.path();
+    gpg.receive_keys(
+        keyring,
+        &commits
+            .iter()
+            .filter(|c| c.tags.len() >= required_tags.into())
+            .flat_map(|c| c.tags.iter().flat_map(|t| t.tagger_email.as_ref()))
+            .cloned()
+            .collect(),
+    )?;
 
-    Ok(commits
+    // TODO: Logging here to make it more obvious what's going on. Maybe need to do this in the mutable way to increase how observable it is?
+
+    let tagged_commits: Vec<(Oid, bool)> = commits
         .iter()
         .filter(|c| c.tags.len() >= required_tags.into())
-        .filter(|_c| true) // TODO: verify all tags (this may fail)
-        .map(|c| c.id)
+        .map(|c| {
+            let verified_tags = c
+                .tags
+                .iter()
+                .map(|t| G::verify_tag_signature(&repo_path, t, keyring))
+                .collect::<Result<Vec<bool>, _>>();
+            verified_tags.map(|t| {
+                (
+                    c.id,
+                    t.into_iter().filter(|res| *res).count() >= required_tags.into(),
+                )
+            })
+        })
+        .collect::<Result<Vec<(Oid, bool)>, _>>()?;
+
+    Ok(tagged_commits
+        .into_iter()
+        .filter(|(_id, tagged)| *tagged)
+        .map(|(id, _tagged)| id)
         .collect())
 }
 
@@ -240,6 +269,7 @@ fn verify_different_authors<G: Git>(
     new_commit_id: Oid,
     ref_name: &str,
 ) -> Result<PolicyResult, Box<dyn Error>> {
+    // TODO: Add taggers to this set
     let new_branch = old_commit_id.is_zero();
     let is_merge = git.is_merge_commit(new_commit_id);
     let is_head = git.is_head(ref_name)?;

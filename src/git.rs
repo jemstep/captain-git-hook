@@ -67,23 +67,6 @@ pub trait Git: Sized {
         let config = Config::from_toml_string(&config_str)?;
         Ok(config)
     }
-
-    fn debug_commit(commit: &Commit<'_>) {
-        debug!(
-            "CommitId: {}, Parent(s): {:?}, Author: {}, Committer: {}, Message: {}",
-            commit.id(),
-            commit
-                .parent_ids()
-                .fold("".to_string(), |acc, next| if acc.is_empty() {
-                    next.to_string()
-                } else {
-                    format!("{},{}", acc, next)
-                }),
-            commit.author(),
-            commit.committer(),
-            commit.summary().unwrap_or("")
-        );
-    }
 }
 
 pub struct LiveGit {

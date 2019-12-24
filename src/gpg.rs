@@ -1,4 +1,5 @@
 use crate::error::CapnError;
+use crate::fingerprints::Keyring;
 use std::collections::HashSet;
 use std::error::Error;
 use std::process::*;
@@ -7,7 +8,11 @@ use log::*;
 use rayon::prelude::*;
 
 pub trait Gpg {
-    fn receive_keys(&self, fingerprints: &HashSet<String>) -> Result<(), Box<dyn Error>>;
+    fn receive_keys(
+        &self,
+        keyring: &mut Keyring,
+        emails: &HashSet<String>,
+    ) -> Result<(), Box<dyn Error>>;
 }
 
 pub struct LiveGpg {
@@ -16,8 +21,24 @@ pub struct LiveGpg {
 }
 
 impl Gpg for LiveGpg {
-    fn receive_keys(&self, fingerprints: &HashSet<String>) -> Result<(), Box<dyn Error>> {
-        if self.parallel_fetch {
+    fn receive_keys(
+        &self,
+        keyring: &mut Keyring,
+        emails: &HashSet<String>,
+    ) -> Result<(), Box<dyn Error>> {
+        let fingerprints: Vec<String> = emails
+            .iter()
+            .filter(|email| {
+                keyring
+                    .fingerprints
+                    .get(*email)
+                    .map(|f| f.pubkey_downloaded)
+                    == Some(false)
+            })
+            .filter_map(|email| keyring.fingerprint_id_from_email(email))
+            .collect();
+
+        let fetch_result = if self.parallel_fetch {
             if fingerprints
                 .par_iter()
                 .map(|fp| match self.receive_key(fp) {
@@ -52,7 +73,18 @@ impl Gpg for LiveGpg {
                     result.code()
                 ))))
             }
+        };
+
+        if let Ok(_) = fetch_result {
+            for email in emails {
+                keyring
+                    .fingerprints
+                    .get_mut(email)
+                    .map(|f| f.pubkey_downloaded = true);
+            }
         }
+        fetch_result?;
+        Ok(())
     }
 }
 
@@ -84,7 +116,18 @@ pub mod test {
 
     pub struct MockGpg;
     impl Gpg for MockGpg {
-        fn receive_keys(&self, _fingerprints: &HashSet<String>) -> Result<(), Box<dyn Error>> {
+        fn receive_keys(
+            &self,
+            keyring: &mut Keyring,
+            emails: &HashSet<String>,
+        ) -> Result<(), Box<dyn Error>> {
+            for email in emails {
+                keyring
+                    .fingerprints
+                    .get_mut(email)
+                    .map(|f| f.pubkey_downloaded = true);
+            }
+
             Ok(())
         }
     }
