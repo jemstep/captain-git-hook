@@ -15,8 +15,6 @@ pub struct VerifyGitCommitsConfig {
     pub team_fingerprints_file: String,
     #[serde(default = "default_true")]
     pub recv_keys_par: bool,
-    #[serde(default = "default_false")]
-    pub skip_recv_keys: bool,
     #[serde(default = "default_true")]
     pub verify_email_addresses: bool,
     #[serde(default = "default_true")]

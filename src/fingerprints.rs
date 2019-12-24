@@ -1,7 +1,8 @@
-use crate::git::*;
-
 use std::collections::HashMap;
-use std::error::Error;
+
+pub struct Keyring {
+    pub fingerprints: HashMap<String, Fingerprint>,
+}
 
 pub struct Fingerprint {
     pub id: String,
@@ -10,20 +11,16 @@ pub struct Fingerprint {
     pub pubkey_downloaded: bool,
 }
 
-impl Fingerprint {
-    pub fn read_fingerprints<G: Git>(
-        git: &G,
-        team_fingerprints_file: &str,
-    ) -> Result<HashMap<String, Fingerprint>, Box<dyn Error>> {
-        let fingerprints_file = git.read_file(team_fingerprints_file)?;
-        let fingerprints: HashMap<String, Fingerprint> = fingerprints_file
+impl Keyring {
+    pub fn from_team_fingerprints_file(file_contents: String) -> Keyring {
+        let fingerprints: HashMap<String, Fingerprint> = file_contents
             .split('\n')
             .filter_map(|l| {
                 let line: Vec<&str> = l.split(',').collect();
                 match &line[..] {
                     [fingerprint, name, email] => {
                         let fingerprint = fingerprint.replace(char::is_whitespace, "");
-                        return Some((
+                        Some((
                             email.to_string(),
                             Fingerprint {
                                 id: fingerprint,
@@ -31,12 +28,16 @@ impl Fingerprint {
                                 email: email.to_string(),
                                 pubkey_downloaded: false,
                             },
-                        ));
+                        ))
                     }
-                    _ => return None,
+                    _ => None,
                 }
             })
             .collect();
-        return Ok(fingerprints);
+        Keyring { fingerprints }
+    }
+
+    pub fn fingerprint_id_from_email(&self, email: &str) -> Option<String> {
+        self.fingerprints.get(email).map(|f| f.id.clone())
     }
 }

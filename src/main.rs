@@ -107,7 +107,11 @@ fn execute_command(command: Command, config: Config) -> Result<PolicyResult, Box
                     match (fields.next(), fields.next(), fields.next(), fields.next()) {
                         (Some(local_ref), Some(local_sha), Some(remote_ref), Some(remote_sha)) => {
                             info!("Running pre-push for: {} {} {} {}", local_ref, local_sha, remote_ref, remote_sha);
-                            pre_push::<LiveGit, LiveGpg>(&args, &config, local_ref, local_sha, remote_ref, remote_sha)
+                            let gpg = LiveGpg {
+                                parallel_fetch: config.verify_git_commits.as_ref().map(|c| c.recv_keys_par).unwrap_or(true),
+                                keyserver: config.verify_git_commits.as_ref().map(|c| c.keyserver.clone()).unwrap_or("".to_string())
+                            };
+                            pre_push::<LiveGit, LiveGpg>(gpg, &args, &config, local_ref, local_sha, remote_ref, remote_sha)
                         },
                         _ => {
                             warn!("Expected parameters not received on stdin. Line received was: {}", line);
@@ -126,7 +130,11 @@ fn execute_command(command: Command, config: Config) -> Result<PolicyResult, Box
                     match (fields.next(), fields.next(), fields.next()) {
                         (Some(old_value), Some(new_value), Some(ref_name)) => {
                             info!("Running pre-receive for: {} {} {}", old_value, new_value, ref_name);
-                            pre_receive::<LiveGit, LiveGpg>(&config, old_value, new_value, ref_name)
+                            let gpg = LiveGpg {
+                                parallel_fetch: config.verify_git_commits.as_ref().map(|c| c.recv_keys_par).unwrap_or(true),
+                                keyserver: config.verify_git_commits.as_ref().map(|c| c.keyserver.clone()).unwrap_or("".to_string())
+                            };
+                            pre_receive::<LiveGit, LiveGpg>(gpg, &config, old_value, new_value, ref_name)
                         },
                         _ => {
                             warn!("Expected parameters not received on stdin. Line received was: {}", line);

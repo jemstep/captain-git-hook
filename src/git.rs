@@ -1,7 +1,6 @@
 use crate::error::CapnError;
-use crate::fingerprints::Fingerprint;
+use crate::fingerprints::Keyring;
 use git2::{Commit, Oid, Repository};
-use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::fs::File;
 use std::io::prelude::*;
@@ -16,10 +15,8 @@ pub struct VerificationCommit {
     pub id: Oid,
     pub author_email: Option<String>,
     pub committer_email: Option<String>,
-    pub is_identical_tree: bool,
+    pub is_identical_tree_to_any_parent: bool,
     pub is_merge_commit: bool,
-    pub valid_signature: bool,
-    pub fingerprint: Option<String>,
     pub tags: Vec<Tag>,
 }
 
@@ -27,7 +24,6 @@ pub struct VerificationCommit {
 pub struct Tag {
     pub id: String,
     pub tagger_email: Option<String>,
-    pub fingerprint: Option<String>,
 }
 
 pub trait Git: Sized {
@@ -40,38 +36,32 @@ pub trait Git: Sized {
         contents: &str,
     ) -> Result<(), Box<dyn Error>>;
     fn current_branch(&self) -> Result<String, Box<dyn Error>>;
-    fn find_commits(&self, from_id: Oid, to_id: Oid) -> Result<Vec<Commit<'_>>, Box<dyn Error>>;
     fn is_tag(&self, id: Oid) -> bool;
     fn find_unpushed_commits(&self, new_commit_id: Oid) -> Result<Vec<Commit<'_>>, Box<dyn Error>>;
-    fn find_commit(&self, commit_id: Oid) -> Result<Commit<'_>, Box<dyn Error>>;
-    fn find_commit_fingerprints(
-        &self,
-        team_fingerprint_file: &str,
-        commits: &Vec<Commit<'_>>,
-    ) -> Result<HashMap<String, Fingerprint>, Box<dyn Error>>;
-
     fn find_verification_commit(
         &self,
         commit_id: Oid,
-        fingerprints: &HashMap<String, Fingerprint>,
     ) -> Result<VerificationCommit, Box<dyn Error>>;
     fn find_verification_commits(
         &self,
         exclusions: &[Oid],
         inclusions: &[Oid],
-        fingerprints: &HashMap<String, Fingerprint>,
     ) -> Result<Vec<VerificationCommit>, Box<dyn Error>>;
 
-    fn merge_commit(new_commit: &Commit<'_>) -> bool;
-    fn is_identical_tree_to_any_parent(commit: &Commit<'_>) -> bool;
+    fn is_merge_commit(&self, commit_id: Oid) -> bool;
     fn is_trivial_merge_commit(&self, commit: &VerificationCommit) -> Result<bool, Box<dyn Error>>;
     fn is_head(&self, ref_name: &str) -> Result<bool, Box<dyn Error>>;
     fn path(&self) -> &std::path::Path;
     fn verify_commit_signature(
         path: &std::path::Path,
         commit: &VerificationCommit,
+        keyring: &Keyring,
     ) -> Result<bool, Box<dyn Error>>;
-    fn verify_tag_signature(path: &std::path::Path, tag: &Tag) -> Result<bool, Box<dyn Error>>;
+    fn verify_tag_signature(
+        path: &std::path::Path,
+        tag: &Tag,
+        keyring: &Keyring,
+    ) -> Result<bool, Box<dyn Error>>;
     fn read_config(&self) -> Result<Config, Box<dyn Error>> {
         let config_str = self.read_file(".capn")?;
         let config = Config::from_toml_string(&config_str)?;
@@ -175,14 +165,9 @@ impl Git for LiveGit {
         }
     }
 
-    fn find_commit(&self, commit_id: Oid) -> Result<Commit<'_>, Box<dyn Error>> {
-        Ok(self.repo.find_commit(commit_id)?)
-    }
-
     fn find_verification_commit(
         &self,
         commit_id: Oid,
-        fingerprints: &HashMap<String, Fingerprint>,
     ) -> Result<VerificationCommit, Box<dyn Error>> {
         // TODO: tags: repo.tag_names -> repo.revparse_single -> object.peel_to_tag -> tag.peel -> object.kind == commit && object.commit = commit.id()
         // Can we configure a prefix for the tag?
@@ -193,44 +178,21 @@ impl Git for LiveGit {
         let committer_email = committer.email().map(|s| s.to_string());
         let author = commit.author();
         let author_email = author.email().map(|s| s.to_string());
-        let fingerprint = committer_email
-            .clone()
-            .and_then(|s| fingerprints.get(&s).map(|f| f.id.to_string()));
 
         Ok(VerificationCommit {
             id: commit.id(),
             author_email: author_email,
             committer_email: committer_email,
             is_merge_commit: commit.parent_count() > 1,
-            is_identical_tree: Self::is_identical_tree_to_any_parent(&commit),
-            valid_signature: false,
-            fingerprint: fingerprint,
+            is_identical_tree_to_any_parent: Self::is_identical_tree_to_any_parent(&commit),
             tags: Vec::new(), // TODO
         })
-    }
-
-    fn find_commit_fingerprints(
-        &self,
-        team_fingerprint_file: &str,
-        commits: &Vec<Commit<'_>>,
-    ) -> Result<HashMap<String, Fingerprint>, Box<dyn Error>> {
-        let mut team_fingerprints =
-            Fingerprint::read_fingerprints::<LiveGit>(self, team_fingerprint_file)?;
-
-        let commit_emails = commits
-            .iter()
-            .filter_map(|c| c.committer().email().map(|email| email.to_string()))
-            .collect::<HashSet<String>>();
-
-        team_fingerprints.retain(|email, _| commit_emails.contains(email));
-        Ok(team_fingerprints)
     }
 
     fn find_verification_commits(
         &self,
         exclusions: &[Oid],
         inclusions: &[Oid],
-        fingerprints: &HashMap<String, Fingerprint>,
     ) -> Result<Vec<VerificationCommit>, Box<dyn Error>> {
         let mut revwalk = self.repo.revwalk()?;
         for &inclusion in inclusions.iter().filter(|id| !id.is_zero()) {
@@ -245,25 +207,9 @@ impl Git for LiveGit {
             .into_iter()
             .map(|id| {
                 id.map_err(|e| e.into())
-                    .and_then(|id| self.find_verification_commit(id, fingerprints))
+                    .and_then(|id| self.find_verification_commit(id))
             })
             .collect::<Result<Vec<_>, _>>()?;
-
-        Ok(commits)
-    }
-
-    fn find_commits(&self, from_id: Oid, to_id: Oid) -> Result<Vec<Commit<'_>>, Box<dyn Error>> {
-        debug!("Find commits between {} to {}", from_id, to_id);
-
-        let mut revwalk = self.repo.revwalk()?;
-        revwalk.push(to_id)?;
-        revwalk.hide(from_id)?;
-        revwalk.hide_head()?;
-
-        let commits = revwalk
-            .into_iter()
-            .map(|id| id.and_then(|id| self.repo.find_commit(id)))
-            .collect::<Result<Vec<_>, git2::Error>>()?;
 
         Ok(commits)
     }
@@ -283,7 +229,11 @@ impl Git for LiveGit {
         Ok(commits)
     }
 
-    fn verify_tag_signature(path: &std::path::Path, tag: &Tag) -> Result<bool, Box<dyn Error>> {
+    fn verify_tag_signature(
+        path: &std::path::Path,
+        tag: &Tag,
+        keyring: &Keyring,
+    ) -> Result<bool, Box<dyn Error>> {
         let tag_id = &tag.id;
 
         let tagger_email = match &tag.tagger_email {
@@ -296,7 +246,7 @@ impl Git for LiveGit {
                 return Ok(false);
             }
         };
-        let expected_fingerprint = match &tag.fingerprint {
+        let expected_fingerprint = match keyring.fingerprint_id_from_email(tagger_email) {
             Some(f) => f,
             None => {
                 debug!(
@@ -336,6 +286,7 @@ impl Git for LiveGit {
     fn verify_commit_signature(
         path: &std::path::Path,
         commit: &VerificationCommit,
+        keyring: &Keyring,
     ) -> Result<bool, Box<dyn Error>> {
         let commit_id = &commit.id;
 
@@ -349,7 +300,7 @@ impl Git for LiveGit {
                 return Ok(false);
             }
         };
-        let expected_fingerprint = match &commit.fingerprint {
+        let expected_fingerprint = match keyring.fingerprint_id_from_email(committer_email) {
             Some(f) => f,
             None => {
                 debug!(
@@ -386,14 +337,11 @@ impl Git for LiveGit {
         }
     }
 
-    fn merge_commit(new_commit: &Commit<'_>) -> bool {
-        let parent_count = new_commit.parent_count();
-        return if parent_count > 1 { true } else { false };
-    }
-
-    fn is_identical_tree_to_any_parent(commit: &Commit<'_>) -> bool {
-        let tree_id = commit.tree_id();
-        commit.parents().any(|p| p.tree_id() == tree_id)
+    fn is_merge_commit(&self, commit_id: Oid) -> bool {
+        self.repo
+            .find_commit(commit_id)
+            .map(|c| c.parent_count() > 1)
+            .unwrap_or(false)
     }
 
     fn is_trivial_merge_commit(
@@ -432,6 +380,13 @@ impl Git for LiveGit {
             Ok(_) => true,
             _ => false,
         }
+    }
+}
+
+impl LiveGit {
+    fn is_identical_tree_to_any_parent(commit: &Commit<'_>) -> bool {
+        let tree_id = commit.tree_id();
+        commit.parents().any(|p| p.tree_id() == tree_id)
     }
 }
 

@@ -82,6 +82,7 @@ pub fn prepend_branch_name<F: Fs, G: Git>(
 }
 
 pub fn verify_git_commits<G: Git, P: Gpg>(
+    gpg: P,
     config: &VerifyGitCommitsConfig,
     old_value: &str,
     new_value: &str,
@@ -107,7 +108,8 @@ pub fn verify_git_commits<G: Git, P: Gpg>(
         //     G::debug_commit(&commit) // TODO
         // }
 
-        let mut keyring = Fingerprint::read_fingerprints(&git, &config.team_fingerprints_file)?;
+        let mut keyring =
+            Keyring::from_team_fingerprints_file(git.read_file(&config.team_fingerprints_file)?);
 
         let exclusions = find_and_verify_override_tags(
             &git,
@@ -118,19 +120,13 @@ pub fn verify_git_commits<G: Git, P: Gpg>(
         let commits =
             commits_to_verify_with_exclusions(&git, old_commit_id, new_commit_id, exclusions)?;
 
-        // TODO: This block needs to be inlined to wherever uses it
-        let fingerprint_ids = keyring.values().map(|f| f.id.clone()).collect();
-        if config.skip_recv_keys {
-            debug!("Skipping importing GPG keys");
-        } else {
-            debug!("Fetching GPG public keys from {}", config.keyserver);
-
-            if config.recv_keys_par {
-                let _result = P::par_receive_keys(&config.keyserver, &fingerprint_ids)?;
-            } else {
-                let _result = P::receive_keys(&config.keyserver, &fingerprint_ids)?;
-            }
-        }
+        // TODO: This block needs to be moved into gpg, and called by whoever needs it
+        let fingerprint_ids = keyring
+            .fingerprints
+            .values()
+            .map(|f| f.id.clone())
+            .collect();
+        gpg.receive_keys(&fingerprint_ids)?;
 
         if config.verify_email_addresses {
             policy_result = policy_result.and(verify_email_addresses(
@@ -170,7 +166,7 @@ fn commits_to_verify<'a, G: Git>(
     new_commit_id: Oid,
 ) -> Result<Vec<VerificationCommit>, Box<dyn Error>> {
     // TODO fingerprints
-    git.find_verification_commits(&[old_commit_id], &[new_commit_id], &HashMap::new())
+    git.find_verification_commits(&[old_commit_id], &[new_commit_id])
 }
 
 fn commits_to_verify_with_exclusions<'a, G: Git>(
@@ -181,14 +177,14 @@ fn commits_to_verify_with_exclusions<'a, G: Git>(
 ) -> Result<Vec<VerificationCommit>, Box<dyn Error>> {
     // TODO fingerprints
     exclusions.push(old_commit_id);
-    git.find_verification_commits(&exclusions, &[new_commit_id], &HashMap::new())
+    git.find_verification_commits(&exclusions, &[new_commit_id])
 }
 
 fn find_and_verify_override_tags<G: Git>(
     _git: &G,
     commits: &Vec<VerificationCommit>,
     required_tags: u8,
-    _fingerprints: &mut HashMap<String, Fingerprint>,
+    _keyring: &mut Keyring,
 ) -> Result<Vec<Oid>, Box<dyn Error>> {
     // TODO: fetch keys
 
@@ -203,68 +199,38 @@ fn find_and_verify_override_tags<G: Git>(
 fn verify_commit_signatures<G: Git>(
     git: &G,
     commits: &[VerificationCommit],
-    fingerprints: &HashMap<String, Fingerprint>,
+    keyring: &Keyring,
 ) -> Result<PolicyResult, Box<dyn Error>> {
-    let verification_commits: HashMap<Oid, VerificationCommit> =
-        generate_verification_commits(git, commits, fingerprints);
+    let repo_path = git.path();
+    let checked_verification_commits: HashMap<Oid, bool> = commits
+        .par_iter()
+        .map(|commit| {
+            let valid_signature = G::verify_commit_signature(repo_path, &commit, keyring);
+            (commit.id, valid_signature.unwrap_or(false))
+        })
+        .collect();
 
     commits.iter()
         .map(|commit| {
-            let verification_commit = verification_commits.get(&commit.id);
-            match verification_commit {
-                Some(vc) => {
-                    if vc.is_identical_tree {
-                        info!("Signature verification passed for {}: verified identical to one of its parents, no signature required", commit.id);
-                        Ok(PolicyResult::Ok)
-                    } else if vc.valid_signature {
-                        info!("Signature verification passed for {}: verified with a valid signature", commit.id);
-                        Ok(PolicyResult::Ok)
-                    } else if git.is_trivial_merge_commit(commit)? {
-                        info!("Signature verification passed for {}: verified to be a trivial merge of its parents, no signature required", commit.id);
-                        Ok(PolicyResult::Ok)
-                    }  else {
-                        error!("Signature verification failed for {}", commit.id);
-                        if commit.is_merge_commit {
-                            Ok(PolicyResult::UnsignedMergeCommit(commit.id))
-                        } else {
-                            Ok(PolicyResult::UnsignedCommit(commit.id))
-                        }
-                    }
-                },
-                None => {
-                    error!("Signature verification failed for {}, verification commit not found", commit.id);
-                    if commit.is_merge_commit {
-                        Ok(PolicyResult::UnsignedMergeCommit(commit.id))
-                    } else {
-                        Ok(PolicyResult::UnsignedCommit(commit.id))
-                    }
+            if commit.is_identical_tree_to_any_parent {
+                info!("Signature verification passed for {}: verified identical to one of its parents, no signature required", commit.id);
+                Ok(PolicyResult::Ok)
+            } else if checked_verification_commits.get(&commit.id).cloned().unwrap_or(false) {
+                info!("Signature verification passed for {}: verified with a valid signature", commit.id);
+                Ok(PolicyResult::Ok)
+            } else if git.is_trivial_merge_commit(commit)? {
+                info!("Signature verification passed for {}: verified to be a trivial merge of its parents, no signature required", commit.id);
+                Ok(PolicyResult::Ok)
+            }  else {
+                error!("Signature verification failed for {}", commit.id);
+                if commit.is_merge_commit {
+                    Ok(PolicyResult::UnsignedMergeCommit(commit.id))
+                } else {
+                    Ok(PolicyResult::UnsignedCommit(commit.id))
                 }
             }
         })
         .collect()
-}
-
-fn generate_verification_commits<G: Git>(
-    git: &G,
-    commits: &[VerificationCommit],
-    _fingerprints: &HashMap<String, Fingerprint>,
-) -> HashMap<Oid, VerificationCommit> {
-    let repo_path = git.path();
-
-    let checked_verification_commits: HashMap<Oid, VerificationCommit> = commits
-        .par_iter()
-        .map(|commit| {
-            let valid_signature = G::verify_commit_signature(repo_path, &commit);
-            (
-                commit.id,
-                VerificationCommit {
-                    valid_signature: valid_signature.unwrap_or(false),
-                    ..commit.clone()
-                },
-            )
-        })
-        .collect();
-    checked_verification_commits
 }
 
 fn verify_different_authors<G: Git>(
@@ -274,9 +240,8 @@ fn verify_different_authors<G: Git>(
     new_commit_id: Oid,
     ref_name: &str,
 ) -> Result<PolicyResult, Box<dyn Error>> {
-    let new_commit = git.find_commit(new_commit_id)?;
     let new_branch = old_commit_id.is_zero();
-    let is_merge = G::merge_commit(&new_commit);
+    let is_merge = git.is_merge_commit(new_commit_id);
     let is_head = git.is_head(ref_name)?;
 
     if !is_head {
