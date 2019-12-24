@@ -259,3 +259,19 @@ fn verify_tagged_git_commits_override_rules() {
     .unwrap();
     assert!(result.is_ok(), "Error: {:?}", result);
 }
+
+#[test]
+fn verify_tagged_git_commits_not_overridden_if_not_enough_tags() {
+    before_all();
+    let result = policies::verify_git_commits::<LiveGit, LiveGpg>(
+        &VerifyGitCommitsConfig {
+            override_tags_required: 2,
+            ..verify_commits_config()
+        },
+        "7f9763e189ade34345e683ab7e0c22d164280452",
+        "6f00838625cd1b7dc0acc66e43fee5594f0f124c",
+        "refs/heads/master",
+    )
+    .unwrap();
+    assert!(result.is_err());
+}
