@@ -211,31 +211,44 @@ fn find_and_verify_override_tags<G: Git, P: Gpg>(
             .collect(),
     )?;
 
-    // TODO: Logging here to make it more obvious what's going on. Maybe need to do this in the mutable way to increase how observable it is?
-
-    let tagged_commits: Vec<(Oid, bool)> = commits
+    let tagged_commits = commits
         .iter()
         .filter(|c| c.tags.len() >= required_tags.into())
-        .map(|c| {
-            let verified_tags = c
+        .filter_map(|c| {
+            let verified_taggers = c
                 .tags
                 .iter()
-                .map(|t| G::verify_tag_signature(&repo_path, t, keyring))
-                .collect::<Result<Vec<bool>, _>>();
-            verified_tags.map(|t| {
-                (
-                    c.id,
-                    t.into_iter().filter(|res| *res).count() >= required_tags.into(),
-                )
-            })
-        })
-        .collect::<Result<Vec<(Oid, bool)>, _>>()?;
+                .filter(|t| verify_tag_logging_errors::<G>(&repo_path, t, keyring))
+                .filter_map(|t| t.tagger_email.clone())
+                .collect::<HashSet<String>>();
 
-    Ok(tagged_commits
-        .into_iter()
-        .filter(|(_id, tagged)| *tagged)
-        .map(|(id, _tagged)| id)
-        .collect())
+            if verified_taggers.len() >= required_tags.into() {
+                info!("Override tags found for {}. Tags created by {:?}. This commit, and it's ancestors, do not require validation.", c.id, verified_taggers);
+                Some(c.id)
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    Ok(tagged_commits)
+}
+
+fn verify_tag_logging_errors<G: Git>(
+    repo_path: &std::path::Path,
+    tag: &Tag,
+    keyring: &Keyring,
+) -> bool {
+    match G::verify_tag_signature(repo_path, tag, keyring) {
+        Ok(result) => result,
+        Err(e) => {
+            error!(
+                "Technical error occurred while trying to validate tag {}. Error: {}",
+                tag.name, e
+            );
+            false
+        }
+    }
 }
 
 fn verify_commit_signatures<G: Git>(

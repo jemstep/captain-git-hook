@@ -23,6 +23,7 @@ pub struct VerificationCommit {
 #[derive(Debug, Clone)]
 pub struct Tag {
     pub id: Oid,
+    pub name: String,
     pub tagger_email: Option<String>,
 }
 
@@ -155,10 +156,6 @@ impl Git for LiveGit {
         commit_id: Oid,
         override_tag_filter: &Option<String>,
     ) -> Result<VerificationCommit, Box<dyn Error>> {
-        // TODO: tags: repo.tag_names -> repo.revparse_single -> object.peel_to_tag -> tag.peel -> object.kind == commit && object.commit = commit.id()
-        // Can we configure a prefix for the tag?
-        // Can we somehow limit the tags further on this level? There may be many...
-
         let commit = self.repo.find_commit(commit_id)?;
         let committer = commit.committer();
         let committer_email = committer.email().map(|s| s.to_string());
@@ -187,6 +184,7 @@ impl Git for LiveGit {
             })
             .map(|tag| Tag {
                 id: tag.id(),
+                name: tag.name().map(|s| s.to_string()).unwrap_or(String::new()),
                 tagger_email: tag
                     .tagger()
                     .and_then(|signature| signature.email().map(|s| s.to_string())),
