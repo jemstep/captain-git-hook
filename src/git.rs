@@ -1,6 +1,6 @@
 use crate::error::CapnError;
 use crate::fingerprints::Keyring;
-use git2::{Commit, Oid, Repository};
+use git2::{Commit, ObjectType, Oid, Repository};
 use std::error::Error;
 use std::fs::File;
 use std::io::prelude::*;
@@ -22,7 +22,7 @@ pub struct VerificationCommit {
 
 #[derive(Debug, Clone)]
 pub struct Tag {
-    pub id: String,
+    pub id: Oid,
     pub tagger_email: Option<String>,
 }
 
@@ -41,11 +41,13 @@ pub trait Git: Sized {
     fn find_verification_commit(
         &self,
         commit_id: Oid,
+        override_tag_filter: &Option<String>,
     ) -> Result<VerificationCommit, Box<dyn Error>>;
     fn find_verification_commits(
         &self,
         exclusions: &[Oid],
         inclusions: &[Oid],
+        override_tag_filter: &Option<String>,
     ) -> Result<Vec<VerificationCommit>, Box<dyn Error>>;
 
     fn is_merge_commit(&self, commit_id: Oid) -> bool;
@@ -151,6 +153,7 @@ impl Git for LiveGit {
     fn find_verification_commit(
         &self,
         commit_id: Oid,
+        override_tag_filter: &Option<String>,
     ) -> Result<VerificationCommit, Box<dyn Error>> {
         // TODO: tags: repo.tag_names -> repo.revparse_single -> object.peel_to_tag -> tag.peel -> object.kind == commit && object.commit = commit.id()
         // Can we configure a prefix for the tag?
@@ -162,13 +165,41 @@ impl Git for LiveGit {
         let author = commit.author();
         let author_email = author.email().map(|s| s.to_string());
 
+        let all_tag_names = self.repo.tag_names(override_tag_filter.as_deref())?;
+        let libgit_tags = all_tag_names
+            .iter()
+            .filter_map(|maybe_tag_name| maybe_tag_name)
+            .map(|tag_name| {
+                self.repo
+                    .revparse_single(tag_name)
+                    .and_then(|git_obj| git_obj.peel_to_tag())
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        // TODO: This is technically correct, but will not scale well
+        // to a bit repo with many tags. This should maybe moved into
+        // the batch access thing, or maybe memoize it somehow, since
+        // it won't be changing the repo at all.
+        let tags: Vec<Tag> = libgit_tags
+            .iter()
+            .filter(|tag| {
+                tag.target_type() == Some(ObjectType::Commit) && tag.target_id() == commit_id
+            })
+            .map(|tag| Tag {
+                id: tag.id(),
+                tagger_email: tag
+                    .tagger()
+                    .and_then(|signature| signature.email().map(|s| s.to_string())),
+            })
+            .collect();
+
         Ok(VerificationCommit {
             id: commit.id(),
             author_email: author_email,
             committer_email: committer_email,
             is_merge_commit: commit.parent_count() > 1,
             is_identical_tree_to_any_parent: Self::is_identical_tree_to_any_parent(&commit),
-            tags: Vec::new(), // TODO
+            tags: tags,
         })
     }
 
@@ -176,6 +207,7 @@ impl Git for LiveGit {
         &self,
         exclusions: &[Oid],
         inclusions: &[Oid],
+        override_tag_filter: &Option<String>,
     ) -> Result<Vec<VerificationCommit>, Box<dyn Error>> {
         let mut revwalk = self.repo.revwalk()?;
         for &inclusion in inclusions.iter().filter(|id| !id.is_zero()) {
@@ -190,7 +222,7 @@ impl Git for LiveGit {
             .into_iter()
             .map(|id| {
                 id.map_err(|e| e.into())
-                    .and_then(|id| self.find_verification_commit(id))
+                    .and_then(|id| self.find_verification_commit(id, override_tag_filter))
             })
             .collect::<Result<Vec<_>, _>>()?;
 

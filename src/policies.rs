@@ -101,7 +101,12 @@ pub fn verify_git_commits<G: Git, P: Gpg>(
     } else if git.is_tag(new_commit_id) {
         debug!("Tag detected, no commits to verify.")
     } else {
-        let commits = commits_to_verify(&git, old_commit_id, new_commit_id)?;
+        let commits = commits_to_verify(
+            &git,
+            old_commit_id,
+            new_commit_id,
+            &config.override_tag_filter,
+        )?;
 
         debug!("Number of commits to verify {} : ", commits.len());
         for commit in &commits {
@@ -118,8 +123,13 @@ pub fn verify_git_commits<G: Git, P: Gpg>(
             config.override_tags_required,
             &mut keyring,
         )?;
-        let commits =
-            commits_to_verify_with_exclusions(&git, old_commit_id, new_commit_id, exclusions)?;
+        let commits = commits_to_verify_with_exclusions(
+            &git,
+            old_commit_id,
+            new_commit_id,
+            exclusions,
+            &config.override_tag_filter,
+        )?;
 
         gpg.receive_keys(
             &mut keyring,
@@ -166,8 +176,10 @@ fn commits_to_verify<'a, G: Git>(
     git: &'a G,
     old_commit_id: Oid,
     new_commit_id: Oid,
+
+    override_tag_filter: &Option<String>,
 ) -> Result<Vec<VerificationCommit>, Box<dyn Error>> {
-    git.find_verification_commits(&[old_commit_id], &[new_commit_id])
+    git.find_verification_commits(&[old_commit_id], &[new_commit_id], override_tag_filter)
 }
 
 fn commits_to_verify_with_exclusions<'a, G: Git>(
@@ -175,9 +187,10 @@ fn commits_to_verify_with_exclusions<'a, G: Git>(
     old_commit_id: Oid,
     new_commit_id: Oid,
     mut exclusions: Vec<Oid>,
+    override_tag_filter: &Option<String>,
 ) -> Result<Vec<VerificationCommit>, Box<dyn Error>> {
     exclusions.push(old_commit_id);
-    git.find_verification_commits(&exclusions, &[new_commit_id])
+    git.find_verification_commits(&exclusions, &[new_commit_id], override_tag_filter)
 }
 
 fn find_and_verify_override_tags<G: Git, P: Gpg>(

@@ -54,7 +54,7 @@ fn verify_commits_config() -> VerifyGitCommitsConfig {
         verify_email_addresses: true,
         verify_commit_signatures: true,
         verify_different_authors: true,
-        override_tag_prefix: "capn-override-".to_string(),
+        override_tag_filter: Some("capn-override-*".to_string()),
         override_tags_required: 1,
     }
 }
