@@ -282,7 +282,6 @@ fn verify_different_authors<G: Git>(
     new_commit_id: Oid,
     ref_name: &str,
 ) -> Result<PolicyResult, Box<dyn Error>> {
-    // TODO: Add taggers to this set
     let new_branch = old_commit_id.is_zero();
     let is_merge = git.is_merge_commit(new_commit_id);
     let is_head = git.is_head(ref_name)?;
@@ -302,7 +301,12 @@ fn verify_different_authors<G: Git>(
     } else {
         let authors: HashSet<_> = commits
             .iter()
-            .filter_map(|c| c.author_email.clone())
+            .flat_map(|c| {
+                c.tags
+                    .iter()
+                    .filter_map(|t| t.tagger_email.as_ref())
+                    .chain(c.author_email.as_ref())
+            })
             .collect();
         if authors.len() <= 1 {
             error!(

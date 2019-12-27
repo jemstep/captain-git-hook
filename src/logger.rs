@@ -124,7 +124,7 @@ impl Logger {
     pub fn test_init() {
         Logger::init(LoggingOpt {
             quiet: false,
-            verbose: 2,
+            verbose: 0,
             log_url: None,
             user: None,
             ip: None,
