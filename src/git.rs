@@ -1,6 +1,8 @@
 use crate::error::CapnError;
 use crate::fingerprints::Keyring;
 use git2::{Commit, ObjectType, Oid, Repository};
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::error::Error;
 use std::fs::File;
 use std::io::prelude::*;
@@ -74,12 +76,16 @@ pub trait Git: Sized {
 
 pub struct LiveGit {
     repo: Repository,
+    tag_cache: RefCell<HashMap<Option<String>, HashMap<Oid, Vec<Tag>>>>,
 }
 
 impl Git for LiveGit {
     fn new() -> Result<Self, Box<dyn Error>> {
         let repo = Repository::discover("./")?;
-        Ok(LiveGit { repo })
+        Ok(LiveGit {
+            repo,
+            tag_cache: RefCell::new(HashMap::new()),
+        })
     }
 
     fn path(&self) -> &std::path::Path {
@@ -162,34 +168,7 @@ impl Git for LiveGit {
         let author = commit.author();
         let author_email = author.email().map(|s| s.to_string());
 
-        let all_tag_names = self.repo.tag_names(override_tag_filter.as_deref())?;
-        let libgit_tags = all_tag_names
-            .iter()
-            .filter_map(|maybe_tag_name| maybe_tag_name)
-            .map(|tag_name| {
-                self.repo
-                    .revparse_single(tag_name)
-                    .and_then(|git_obj| git_obj.peel_to_tag())
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-
-        // TODO: This is technically correct, but will not scale well
-        // to a bit repo with many tags. This should maybe moved into
-        // the batch access thing, or maybe memoize it somehow, since
-        // it won't be changing the repo at all.
-        let tags: Vec<Tag> = libgit_tags
-            .iter()
-            .filter(|tag| {
-                tag.target_type() == Some(ObjectType::Commit) && tag.target_id() == commit_id
-            })
-            .map(|tag| Tag {
-                id: tag.id(),
-                name: tag.name().map(|s| s.to_string()).unwrap_or(String::new()),
-                tagger_email: tag
-                    .tagger()
-                    .and_then(|signature| signature.email().map(|s| s.to_string())),
-            })
-            .collect();
+        let tags = self.get_tags(commit_id, override_tag_filter);
 
         Ok(VerificationCommit {
             id: commit.id(),
@@ -400,6 +379,51 @@ impl LiveGit {
     fn is_identical_tree_to_any_parent(commit: &Commit<'_>) -> bool {
         let tree_id = commit.tree_id();
         commit.parents().any(|p| p.tree_id() == tree_id)
+    }
+
+    fn get_tags(&self, commit_id: Oid, filter: &Option<String>) -> Vec<Tag> {
+        let mut tag_cache = self.tag_cache.borrow_mut();
+
+        tag_cache
+            .entry(filter.clone())
+            .or_insert_with(|| {
+                let all_tag_names = self.repo.tag_names(filter.as_deref()).ok();
+                let libgit_tags = all_tag_names
+                    .map(|tag_names| {
+                        tag_names
+                            .iter()
+                            .filter_map(|maybe_tag_name| maybe_tag_name)
+                            .filter_map(|tag_name| {
+                                self.repo
+                                    .revparse_single(tag_name)
+                                    .and_then(|git_obj| git_obj.peel_to_tag())
+                                    .ok()
+                            })
+                            .collect::<Vec<_>>()
+                    })
+                    .unwrap_or(Vec::new());
+
+                let tags: HashMap<Oid, Vec<Tag>> = libgit_tags
+                    .iter()
+                    .filter(|tag| tag.target_type() == Some(ObjectType::Commit))
+                    .fold(HashMap::new(), |mut map, tag| {
+                        map.entry(tag.target_id())
+                            .or_insert_with(|| Vec::new())
+                            .push(Tag {
+                                id: tag.id(),
+                                name: tag.name().map(|s| s.to_string()).unwrap_or(String::new()),
+                                tagger_email: tag
+                                    .tagger()
+                                    .and_then(|signature| signature.email().map(|s| s.to_string())),
+                            });
+                        map
+                    });
+
+                tags
+            })
+            .get(&commit_id)
+            .cloned()
+            .unwrap_or(Vec::new())
     }
 }
 
