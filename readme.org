@@ -58,17 +58,23 @@ This will add an executable to your path called ~capn~.
 ** Usage
 
 *** Git Hooks
-
 Captain Git Hook works by installing hooks in your Git repository. Git
 will then call out to Captain Git Hook at various points in its
 lifecycle.
-
+**** On a local development machine
 To get started, go to your Git repo and run the ~install-hooks~
 command.
 
 #+BEGIN_SRC shell
   capn install-hooks
 #+END_SRC
+**** On a Git Server
+Some of policies run on the 'pre-receive' hook, as commits are being
+recieved by a Git server.
+
+How to install this will depend on how you administrate your Git
+server. For example, these are the instructions for GitHub Enterprise:
+[[https://help.github.com/en/enterprise/2.19/admin/developer-workflow/managing-pre-receive-hooks-on-the-github-enterprise-server-appliance][Managing pre-receive hooks on the GitHub Enterprise Server appliance]].
 
 *** Policy Configuration
 
@@ -94,12 +100,13 @@ Fingerprint, Name, Email. For example:
 3FFD FF12 60CC D40C B14F  67E2 9C1E 6C5B 630C 6EE1,Justin Wernick,justin@jemstep.com
 #+END_SRC
 
+This is the config section for this policy:
+
 #+BEGIN_SRC toml
   [verify_git_commits]
   verify_email_addresses = true # if true, ensure that committers and authors have the specified domain
   author_domain = "yourdomain.com" # required domain for author email addresses
   committer_domain = "yourdomain.com" # required domain for committer email addresses
-
 
   verify_commit_signatures = true # if true, ensure that all code changes have a GPG signature
   keyserver = "hkp://your.preferred.keyserver" # url to the keyserver to fetch public keys from
@@ -108,7 +115,30 @@ Fingerprint, Name, Email. For example:
   skip_recv_keys = false # if true, do not fetch keys from the keyserver
 
   verify_different_authors = true # if true, merge commits to the head branch of the repo should have multiple authors in the branch
+
+  override_tag_filter = "Capn-override-*" # glob used to limit tags that are considered override tags (see Override Tags docs)
+  override_tags_required = 2 # the number of tags required to override signed commit rules
 #+END_SRC
+
+***** Override Tags
+
+Sometimes, you need to override the verification checks for a range of
+commits. For example, it may be necessary to mark a starting 'good'
+point when first introducing the policy.
+
+This can be done by adding signed tags to the commit. The signatures
+must belong to people in the Team Fingerprints file, and the number of
+signed tags required is determined by the config. If there are enough
+signed tags on a commit, then all ancestors of that commit will not be
+checked.
+
+Signed tags are created in Git using this command:
+
+#+BEGIN_SRC shell
+git tag --sign <tag-name>
+git push <remote> <tag-name>
+#+END_SRC
+
 * Development
 
 ** Integration tests

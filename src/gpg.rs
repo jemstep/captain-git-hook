@@ -3,6 +3,7 @@ use crate::fingerprints::Keyring;
 use std::collections::HashSet;
 use std::error::Error;
 use std::process::*;
+use std::time::Instant;
 
 use log::*;
 use rayon::prelude::*;
@@ -26,6 +27,8 @@ impl Gpg for LiveGpg {
         keyring: &mut Keyring,
         emails: &HashSet<String>,
     ) -> Result<(), Box<dyn Error>> {
+        let start = Instant::now();
+
         let fingerprints: Vec<String> = emails
             .iter()
             .filter(|email| {
@@ -84,6 +87,12 @@ impl Gpg for LiveGpg {
             }
         }
         fetch_result?;
+
+        trace!(
+            "GPG receive_keys completed in: {} ms",
+            start.elapsed().as_millis()
+        );
+
         Ok(())
     }
 }
