@@ -1,5 +1,5 @@
 use crate::error::CapnError;
-use crate::fingerprints::Keyring;
+use crate::keyring::Keyring;
 use git2::{Commit, ObjectType, Oid, Repository};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -41,12 +41,12 @@ pub trait Git: Sized {
     fn current_branch(&self) -> Result<String, Box<dyn Error>>;
     fn is_tag(&self, id: Oid) -> bool;
     fn find_unpushed_commits(&self, new_commit_id: Oid) -> Result<Vec<Commit<'_>>, Box<dyn Error>>;
-    fn find_verification_commit(
+    fn find_commit(
         &self,
         commit_id: Oid,
         override_tag_filter: &Option<String>,
     ) -> Result<VerificationCommit, Box<dyn Error>>;
-    fn find_verification_commits(
+    fn find_commits(
         &self,
         exclusions: &[Oid],
         inclusions: &[Oid],
@@ -157,7 +157,7 @@ impl Git for LiveGit {
         }
     }
 
-    fn find_verification_commit(
+    fn find_commit(
         &self,
         commit_id: Oid,
         override_tag_filter: &Option<String>,
@@ -180,7 +180,7 @@ impl Git for LiveGit {
         })
     }
 
-    fn find_verification_commits(
+    fn find_commits(
         &self,
         exclusions: &[Oid],
         inclusions: &[Oid],
@@ -199,7 +199,7 @@ impl Git for LiveGit {
             .into_iter()
             .map(|id| {
                 id.map_err(|e| e.into())
-                    .and_then(|id| self.find_verification_commit(id, override_tag_filter))
+                    .and_then(|id| self.find_commit(id, override_tag_filter))
             })
             .collect::<Result<Vec<_>, _>>()?;
 

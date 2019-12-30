@@ -1,8 +1,8 @@
 use crate::config::VerifyGitCommitsConfig;
-use crate::fingerprints::*;
 use crate::fs::*;
 use crate::git::*;
 use crate::gpg::*;
+use crate::keyring::*;
 
 use git2::Oid;
 use rayon::prelude::*;
@@ -179,7 +179,7 @@ fn commits_to_verify<'a, G: Git>(
 
     override_tag_filter: &Option<String>,
 ) -> Result<Vec<VerificationCommit>, Box<dyn Error>> {
-    git.find_verification_commits(&[old_commit_id], &[new_commit_id], override_tag_filter)
+    git.find_commits(&[old_commit_id], &[new_commit_id], override_tag_filter)
 }
 
 fn commits_to_verify_with_exclusions<'a, G: Git>(
@@ -190,7 +190,7 @@ fn commits_to_verify_with_exclusions<'a, G: Git>(
     override_tag_filter: &Option<String>,
 ) -> Result<Vec<VerificationCommit>, Box<dyn Error>> {
     exclusions.push(old_commit_id);
-    git.find_verification_commits(&exclusions, &[new_commit_id], override_tag_filter)
+    git.find_commits(&exclusions, &[new_commit_id], override_tag_filter)
 }
 
 fn find_and_verify_override_tags<G: Git, P: Gpg>(

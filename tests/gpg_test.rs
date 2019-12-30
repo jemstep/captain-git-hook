@@ -1,5 +1,5 @@
-use capn::fingerprints::{Fingerprint, Keyring};
 use capn::gpg::*;
+use capn::keyring::{Fingerprint, Keyring};
 use std::collections::{HashMap, HashSet};
 
 #[test]

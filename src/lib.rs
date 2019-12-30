@@ -16,10 +16,10 @@ use crate::policies::*;
 
 pub mod config;
 pub mod error;
-pub mod fingerprints;
 pub mod fs;
 pub mod git;
 pub mod gpg;
+pub mod keyring;
 pub mod logger;
 pub mod policies;
 

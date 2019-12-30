@@ -1,5 +1,5 @@
 use crate::error::CapnError;
-use crate::fingerprints::Keyring;
+use crate::keyring::Keyring;
 use std::collections::HashSet;
 use std::error::Error;
 use std::process::*;
