@@ -31,13 +31,7 @@ impl Gpg for LiveGpg {
 
         let fingerprints: Vec<String> = emails
             .iter()
-            .filter(|email| {
-                keyring
-                    .fingerprints
-                    .get(*email)
-                    .map(|f| f.pubkey_downloaded)
-                    == Some(false)
-            })
+            .filter(|email| keyring.requires_public_key_download(email))
             .filter_map(|email| keyring.fingerprint_id_from_email(email))
             .collect();
 
@@ -78,12 +72,7 @@ impl Gpg for LiveGpg {
         };
 
         if let Ok(_) = fetch_result {
-            for email in emails {
-                keyring
-                    .fingerprints
-                    .get_mut(email)
-                    .map(|f| f.pubkey_downloaded = true);
-            }
+            keyring.mark_public_keys_available(emails);
         }
 
         trace!(
@@ -129,13 +118,7 @@ pub mod test {
             keyring: &mut Keyring,
             emails: &HashSet<String>,
         ) -> Result<(), Box<dyn Error>> {
-            for email in emails {
-                keyring
-                    .fingerprints
-                    .get_mut(email)
-                    .map(|f| f.pubkey_downloaded = true);
-            }
-
+            keyring.mark_public_keys_available(emails);
             Ok(())
         }
     }

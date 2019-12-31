@@ -13,7 +13,7 @@ fn receive_keys_attempts_to_fetch_unfetched_keys() {
             id: "1212121212121212112".to_string(),
             name: "Test User".to_string(),
             email: "test@jemstep.com".to_string(),
-            pubkey_downloaded: false,
+            public_key_is_available_locally: false,
         },
     );
 
@@ -41,7 +41,7 @@ fn receive_keys_does_not_fetch_already_fetched_keys() {
             id: "1212121212121212112".to_string(),
             name: "Test User".to_string(),
             email: "test@jemstep.com".to_string(),
-            pubkey_downloaded: true,
+            public_key_is_available_locally: true,
         },
     );
 

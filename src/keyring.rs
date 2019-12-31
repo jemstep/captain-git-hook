@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 pub struct Keyring {
     pub fingerprints: HashMap<String, Fingerprint>,
@@ -8,7 +8,7 @@ pub struct Fingerprint {
     pub id: String,
     pub name: String,
     pub email: String,
-    pub pubkey_downloaded: bool,
+    pub public_key_is_available_locally: bool,
 }
 
 impl Keyring {
@@ -26,7 +26,7 @@ impl Keyring {
                                 id: fingerprint,
                                 name: name.to_string(),
                                 email: email.to_string(),
-                                pubkey_downloaded: false,
+                                public_key_is_available_locally: false,
                             },
                         ))
                     }
@@ -39,5 +39,20 @@ impl Keyring {
 
     pub fn fingerprint_id_from_email(&self, email: &str) -> Option<String> {
         self.fingerprints.get(email).map(|f| f.id.clone())
+    }
+
+    pub fn requires_public_key_download(&self, email: &str) -> bool {
+        self.fingerprints
+            .get(email)
+            .filter(|f| !f.public_key_is_available_locally)
+            .is_some()
+    }
+
+    pub fn mark_public_keys_available(&mut self, emails: &HashSet<String>) {
+        for email in emails {
+            self.fingerprints
+                .get_mut(email)
+                .map(|f| f.public_key_is_available_locally = true);
+        }
     }
 }
