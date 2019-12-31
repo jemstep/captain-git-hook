@@ -178,7 +178,7 @@ fn commits_to_verify<'a, G: Git>(
     new_commit_id: Oid,
 
     override_tag_filter: &Option<String>,
-) -> Result<Vec<VerificationCommit>, Box<dyn Error>> {
+) -> Result<Vec<Commit>, Box<dyn Error>> {
     git.find_commits(&[old_commit_id], &[new_commit_id], override_tag_filter)
 }
 
@@ -188,7 +188,7 @@ fn commits_to_verify_with_exclusions<'a, G: Git>(
     new_commit_id: Oid,
     mut exclusions: Vec<Oid>,
     override_tag_filter: &Option<String>,
-) -> Result<Vec<VerificationCommit>, Box<dyn Error>> {
+) -> Result<Vec<Commit>, Box<dyn Error>> {
     exclusions.push(old_commit_id);
     git.find_commits(&exclusions, &[new_commit_id], override_tag_filter)
 }
@@ -196,7 +196,7 @@ fn commits_to_verify_with_exclusions<'a, G: Git>(
 fn find_and_verify_override_tags<G: Git, P: Gpg>(
     git: &G,
     gpg: &P,
-    commits: &Vec<VerificationCommit>,
+    commits: &Vec<Commit>,
     required_tags: u8,
     keyring: &mut Keyring,
 ) -> Result<Vec<Oid>, Box<dyn Error>> {
@@ -253,7 +253,7 @@ fn verify_tag_logging_errors<G: Git>(
 
 fn verify_commit_signatures<G: Git>(
     git: &G,
-    commits: &[VerificationCommit],
+    commits: &[Commit],
     keyring: &Keyring,
 ) -> Result<PolicyResult, Box<dyn Error>> {
     let repo_path = git.path();
@@ -289,7 +289,7 @@ fn verify_commit_signatures<G: Git>(
 }
 
 fn verify_different_authors<G: Git>(
-    commits: &[VerificationCommit],
+    commits: &[Commit],
     git: &G,
     old_commit_id: Oid,
     new_commit_id: Oid,
@@ -340,7 +340,7 @@ fn verify_different_authors<G: Git>(
 fn verify_email_addresses(
     author_domain: &str,
     committer_domain: &str,
-    commits: &[VerificationCommit],
+    commits: &[Commit],
 ) -> PolicyResult {
     commits
         .iter()

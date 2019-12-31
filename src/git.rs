@@ -1,6 +1,7 @@
 use crate::error::CapnError;
 use crate::keyring::Keyring;
-use git2::{Commit, ObjectType, Oid, Repository};
+use git2;
+use git2::{ObjectType, Oid, Repository};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::error::Error;
@@ -13,7 +14,7 @@ use crate::config::*;
 use log::*;
 
 #[derive(Debug, Clone)]
-pub struct VerificationCommit {
+pub struct Commit {
     pub id: Oid,
     pub author_email: Option<String>,
     pub committer_email: Option<String>,
@@ -40,26 +41,29 @@ pub trait Git: Sized {
     ) -> Result<(), Box<dyn Error>>;
     fn current_branch(&self) -> Result<String, Box<dyn Error>>;
     fn is_tag(&self, id: Oid) -> bool;
-    fn find_unpushed_commits(&self, new_commit_id: Oid) -> Result<Vec<Commit<'_>>, Box<dyn Error>>;
+    fn find_unpushed_commits(
+        &self,
+        new_commit_id: Oid,
+    ) -> Result<Vec<git2::Commit<'_>>, Box<dyn Error>>;
     fn find_commit(
         &self,
         commit_id: Oid,
         override_tag_filter: &Option<String>,
-    ) -> Result<VerificationCommit, Box<dyn Error>>;
+    ) -> Result<Commit, Box<dyn Error>>;
     fn find_commits(
         &self,
         exclusions: &[Oid],
         inclusions: &[Oid],
         override_tag_filter: &Option<String>,
-    ) -> Result<Vec<VerificationCommit>, Box<dyn Error>>;
+    ) -> Result<Vec<Commit>, Box<dyn Error>>;
 
     fn is_merge_commit(&self, commit_id: Oid) -> bool;
-    fn is_trivial_merge_commit(&self, commit: &VerificationCommit) -> Result<bool, Box<dyn Error>>;
+    fn is_trivial_merge_commit(&self, commit: &Commit) -> Result<bool, Box<dyn Error>>;
     fn is_head(&self, ref_name: &str) -> Result<bool, Box<dyn Error>>;
     fn path(&self) -> &std::path::Path;
     fn verify_commit_signature(
         path: &std::path::Path,
-        commit: &VerificationCommit,
+        commit: &Commit,
         keyring: &Keyring,
     ) -> Result<bool, Box<dyn Error>>;
     fn verify_tag_signature(
@@ -161,7 +165,7 @@ impl Git for LiveGit {
         &self,
         commit_id: Oid,
         override_tag_filter: &Option<String>,
-    ) -> Result<VerificationCommit, Box<dyn Error>> {
+    ) -> Result<Commit, Box<dyn Error>> {
         let commit = self.repo.find_commit(commit_id)?;
         let committer = commit.committer();
         let committer_email = committer.email().map(|s| s.to_string());
@@ -170,7 +174,7 @@ impl Git for LiveGit {
 
         let tags = self.get_tags(commit_id, override_tag_filter);
 
-        Ok(VerificationCommit {
+        Ok(Commit {
             id: commit.id(),
             author_email: author_email,
             committer_email: committer_email,
@@ -185,7 +189,7 @@ impl Git for LiveGit {
         exclusions: &[Oid],
         inclusions: &[Oid],
         override_tag_filter: &Option<String>,
-    ) -> Result<Vec<VerificationCommit>, Box<dyn Error>> {
+    ) -> Result<Vec<Commit>, Box<dyn Error>> {
         let mut revwalk = self.repo.revwalk()?;
         for &inclusion in inclusions.iter().filter(|id| !id.is_zero()) {
             revwalk.push(inclusion)?;
@@ -206,7 +210,10 @@ impl Git for LiveGit {
         Ok(commits)
     }
 
-    fn find_unpushed_commits(&self, new_commit_id: Oid) -> Result<Vec<Commit<'_>>, Box<dyn Error>> {
+    fn find_unpushed_commits(
+        &self,
+        new_commit_id: Oid,
+    ) -> Result<Vec<git2::Commit<'_>>, Box<dyn Error>> {
         debug!("Get unpushed commits from {} ", new_commit_id);
 
         let mut revwalk = self.repo.revwalk()?;
@@ -277,7 +284,7 @@ impl Git for LiveGit {
 
     fn verify_commit_signature(
         path: &std::path::Path,
-        commit: &VerificationCommit,
+        commit: &Commit,
         keyring: &Keyring,
     ) -> Result<bool, Box<dyn Error>> {
         let commit_id = &commit.id;
@@ -338,7 +345,7 @@ impl Git for LiveGit {
 
     fn is_trivial_merge_commit(
         &self,
-        verification_commit: &VerificationCommit,
+        verification_commit: &Commit,
     ) -> Result<bool, Box<dyn Error>> {
         use git2::MergeOptions;
         let commit = self.repo.find_commit(verification_commit.id)?;
@@ -376,7 +383,7 @@ impl Git for LiveGit {
 }
 
 impl LiveGit {
-    fn is_identical_tree_to_any_parent(commit: &Commit<'_>) -> bool {
+    fn is_identical_tree_to_any_parent(commit: &git2::Commit<'_>) -> bool {
         let tree_id = commit.tree_id();
         commit.parents().any(|p| p.tree_id() == tree_id)
     }
