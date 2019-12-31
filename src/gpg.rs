@@ -85,13 +85,13 @@ impl Gpg for LiveGpg {
                     .map(|f| f.pubkey_downloaded = true);
             }
         }
-        fetch_result?;
 
         trace!(
             "GPG receive_keys completed in: {} ms",
             start.elapsed().as_millis()
         );
 
+        fetch_result?;
         Ok(())
     }
 }
