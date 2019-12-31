@@ -12,7 +12,7 @@ pub trait Gpg {
     fn receive_keys(
         &self,
         keyring: &mut Keyring,
-        emails: &HashSet<String>,
+        emails: &HashSet<&str>,
     ) -> Result<(), Box<dyn Error>>;
 }
 
@@ -25,7 +25,7 @@ impl Gpg for LiveGpg {
     fn receive_keys(
         &self,
         keyring: &mut Keyring,
-        emails: &HashSet<String>,
+        emails: &HashSet<&str>,
     ) -> Result<(), Box<dyn Error>> {
         let start = Instant::now();
 
@@ -116,7 +116,7 @@ pub mod test {
         fn receive_keys(
             &self,
             keyring: &mut Keyring,
-            emails: &HashSet<String>,
+            emails: &HashSet<&str>,
         ) -> Result<(), Box<dyn Error>> {
             keyring.mark_public_keys_available(emails);
             Ok(())

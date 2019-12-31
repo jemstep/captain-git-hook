@@ -116,7 +116,7 @@ This is the config section for this policy:
 
   verify_different_authors = true # if true, merge commits to the head branch of the repo should have multiple authors in the branch
 
-  override_tag_filter = "Capn-override-*" # glob used to limit tags that are considered override tags (see Override Tags docs)
+  override_tag_pattern = "capn-override-*" # glob used to limit tags that are considered override tags (see Override Tags docs)
   override_tags_required = 2 # the number of tags required to override signed commit rules
 #+END_SRC
 

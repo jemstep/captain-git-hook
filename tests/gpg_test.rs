@@ -18,7 +18,7 @@ fn receive_keys_attempts_to_fetch_unfetched_keys() {
     );
 
     let mut emails = HashSet::new();
-    emails.insert("test@jemstep.com".to_string());
+    emails.insert("test@jemstep.com");
 
     let result = LiveGpg {
         parallel_fetch: true,
@@ -46,7 +46,7 @@ fn receive_keys_does_not_fetch_already_fetched_keys() {
     );
 
     let mut emails = HashSet::new();
-    emails.insert("test@jemstep.com".to_string());
+    emails.insert("test@jemstep.com");
 
     let result = LiveGpg {
         parallel_fetch: true,

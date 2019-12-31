@@ -6,7 +6,7 @@ use crate::keyring::*;
 
 use git2::Oid;
 use rayon::prelude::*;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::error::Error;
 use std::fmt;
 use std::iter;
@@ -105,7 +105,7 @@ pub fn verify_git_commits<G: Git, P: Gpg>(
             &git,
             old_commit_id,
             new_commit_id,
-            &config.override_tag_filter,
+            &config.override_tag_pattern,
         )?;
 
         debug!("Number of commits to verify {} : ", commits.len());
@@ -128,15 +128,14 @@ pub fn verify_git_commits<G: Git, P: Gpg>(
             old_commit_id,
             new_commit_id,
             exclusions,
-            &config.override_tag_filter,
+            &config.override_tag_pattern,
         )?;
 
         gpg.receive_keys(
             &mut keyring,
             &commits
                 .iter()
-                .filter_map(|c| c.committer_email.as_ref())
-                .cloned()
+                .filter_map(|c| c.committer_email.as_deref())
                 .collect(),
         )?;
 
@@ -177,9 +176,9 @@ fn commits_to_verify<'a, G: Git>(
     old_commit_id: Oid,
     new_commit_id: Oid,
 
-    override_tag_filter: &Option<String>,
+    override_tag_pattern: &Option<String>,
 ) -> Result<Vec<Commit>, Box<dyn Error>> {
-    git.find_commits(&[old_commit_id], &[new_commit_id], override_tag_filter)
+    git.find_commits(&[old_commit_id], &[new_commit_id], override_tag_pattern)
 }
 
 fn commits_to_verify_with_exclusions<'a, G: Git>(
@@ -187,10 +186,10 @@ fn commits_to_verify_with_exclusions<'a, G: Git>(
     old_commit_id: Oid,
     new_commit_id: Oid,
     mut exclusions: Vec<Oid>,
-    override_tag_filter: &Option<String>,
+    override_tag_pattern: &Option<String>,
 ) -> Result<Vec<Commit>, Box<dyn Error>> {
     exclusions.push(old_commit_id);
-    git.find_commits(&exclusions, &[new_commit_id], override_tag_filter)
+    git.find_commits(&exclusions, &[new_commit_id], override_tag_pattern)
 }
 
 fn find_and_verify_override_tags<G: Git, P: Gpg>(
@@ -206,8 +205,7 @@ fn find_and_verify_override_tags<G: Git, P: Gpg>(
         &commits
             .iter()
             .filter(|c| c.tags.len() >= required_tags.into())
-            .flat_map(|c| c.tags.iter().flat_map(|t| t.tagger_email.as_ref()))
-            .cloned()
+            .flat_map(|c| c.tags.iter().flat_map(|t| t.tagger_email.as_deref()))
             .collect(),
     )?;
 
@@ -219,8 +217,8 @@ fn find_and_verify_override_tags<G: Git, P: Gpg>(
                 .tags
                 .iter()
                 .filter(|t| verify_tag_logging_errors::<G>(&repo_path, t, keyring))
-                .filter_map(|t| t.tagger_email.clone())
-                .collect::<HashSet<String>>();
+                .filter_map(|t| t.tagger_email.as_ref())
+                .collect::<HashSet<_>>();
 
             if verified_taggers.len() >= required_tags.into() {
                 info!("Override tags found for {}. Tags created by {:?}. This commit, and it's ancestors, do not require validation.", c.id, verified_taggers);
@@ -257,12 +255,21 @@ fn verify_commit_signatures<G: Git>(
     keyring: &Keyring,
 ) -> Result<PolicyResult, Box<dyn Error>> {
     let repo_path = git.path();
-    let checked_verification_commits: HashMap<Oid, bool> = commits
+    let commits_with_verified_signatures: HashSet<Oid> = commits
         .par_iter()
-        .map(|commit| {
-            let valid_signature = G::verify_commit_signature(repo_path, &commit, keyring);
-            (commit.id, valid_signature.unwrap_or(false))
+        .filter(|commit| {
+            match G::verify_commit_signature(repo_path, &commit, keyring) {
+                Ok(result) => result,
+                Err(e) => {
+                    error!(
+                        "Technical error occurred while trying to validate commit signature {}. Error: {}",
+                           commit.id, e
+                    );
+                    false
+                }
+            }
         })
+        .map(|commit| commit.id)
         .collect();
 
     commits.iter()
@@ -270,7 +277,7 @@ fn verify_commit_signatures<G: Git>(
             if commit.is_identical_tree_to_any_parent {
                 info!("Signature verification passed for {}: verified identical to one of its parents, no signature required", commit.id);
                 Ok(PolicyResult::Ok)
-            } else if checked_verification_commits.get(&commit.id).cloned().unwrap_or(false) {
+            } else if commits_with_verified_signatures.contains(&commit.id) {
                 info!("Signature verification passed for {}: verified with a valid signature", commit.id);
                 Ok(PolicyResult::Ok)
             } else if git.is_trivial_merge_commit(commit)? {

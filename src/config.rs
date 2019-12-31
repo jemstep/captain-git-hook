@@ -24,7 +24,7 @@ pub struct VerifyGitCommitsConfig {
     pub verify_different_authors: bool,
 
     #[serde(default)]
-    pub override_tag_filter: Option<String>,
+    pub override_tag_pattern: Option<String>,
     #[serde(default = "default_two")]
     pub override_tags_required: u8,
 }

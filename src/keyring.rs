@@ -48,10 +48,10 @@ impl Keyring {
             .is_some()
     }
 
-    pub fn mark_public_keys_available(&mut self, emails: &HashSet<String>) {
+    pub fn mark_public_keys_available(&mut self, emails: &HashSet<&str>) {
         for email in emails {
             self.fingerprints
-                .get_mut(email)
+                .get_mut(&email.to_string())
                 .map(|f| f.public_key_is_available_locally = true);
         }
     }

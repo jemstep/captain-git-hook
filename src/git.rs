@@ -48,13 +48,13 @@ pub trait Git: Sized {
     fn find_commit(
         &self,
         commit_id: Oid,
-        override_tag_filter: &Option<String>,
+        override_tag_pattern: &Option<String>,
     ) -> Result<Commit, Box<dyn Error>>;
     fn find_commits(
         &self,
         exclusions: &[Oid],
         inclusions: &[Oid],
-        override_tag_filter: &Option<String>,
+        override_tag_pattern: &Option<String>,
     ) -> Result<Vec<Commit>, Box<dyn Error>>;
 
     fn is_merge_commit(&self, commit_id: Oid) -> bool;
@@ -164,7 +164,7 @@ impl Git for LiveGit {
     fn find_commit(
         &self,
         commit_id: Oid,
-        override_tag_filter: &Option<String>,
+        override_tag_pattern: &Option<String>,
     ) -> Result<Commit, Box<dyn Error>> {
         let commit = self.repo.find_commit(commit_id)?;
         let committer = commit.committer();
@@ -172,7 +172,7 @@ impl Git for LiveGit {
         let author = commit.author();
         let author_email = author.email().map(|s| s.to_string());
 
-        let tags = self.get_tags(commit_id, override_tag_filter);
+        let tags = self.get_tags(commit_id, override_tag_pattern);
 
         Ok(Commit {
             id: commit.id(),
@@ -188,7 +188,7 @@ impl Git for LiveGit {
         &self,
         exclusions: &[Oid],
         inclusions: &[Oid],
-        override_tag_filter: &Option<String>,
+        override_tag_pattern: &Option<String>,
     ) -> Result<Vec<Commit>, Box<dyn Error>> {
         let mut revwalk = self.repo.revwalk()?;
         for &inclusion in inclusions.iter().filter(|id| !id.is_zero()) {
@@ -203,7 +203,7 @@ impl Git for LiveGit {
             .into_iter()
             .map(|id| {
                 id.map_err(|e| e.into())
-                    .and_then(|id| self.find_commit(id, override_tag_filter))
+                    .and_then(|id| self.find_commit(id, override_tag_pattern))
             })
             .collect::<Result<Vec<_>, _>>()?;
 
@@ -388,13 +388,13 @@ impl LiveGit {
         commit.parents().any(|p| p.tree_id() == tree_id)
     }
 
-    fn get_tags(&self, commit_id: Oid, filter: &Option<String>) -> Vec<Tag> {
+    fn get_tags(&self, commit_id: Oid, pattern: &Option<String>) -> Vec<Tag> {
         let mut tag_cache = self.tag_cache.borrow_mut();
 
         tag_cache
-            .entry(filter.clone())
+            .entry(pattern.clone())
             .or_insert_with(|| {
-                let all_tag_names = self.repo.tag_names(filter.as_deref()).ok();
+                let all_tag_names = self.repo.tag_names(pattern.as_deref()).ok();
                 let libgit_tags = all_tag_names
                     .map(|tag_names| {
                         tag_names

@@ -11,3 +11,5 @@ e9752e78505f3c9bcec15d4bef4299caf0538388 refs/heads/unsigned-buried-behind-merge
 3eb315d10e2ad89555d7bfc78a1db1ce07bce434 refs/heads/valid-merge
 234f4d3d75c4215039afd598f75976f686f22cb0 refs/tags/capn-override-test-user-1
 ^6f00838625cd1b7dc0acc66e43fee5594f0f124c
+d43e424f3268cf86cadfab2d5fe1bcebf6ecca93 refs/tags/capn-override-test-user-2
+^6f00838625cd1b7dc0acc66e43fee5594f0f124c
