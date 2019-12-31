@@ -44,14 +44,13 @@ impl Gpg for LiveGpg {
         let fetch_result = if self.parallel_fetch {
             if fingerprints
                 .par_iter()
-                .map(|fp| match self.receive_key(fp) {
+                .all(|fp| match self.receive_key(fp) {
                     Ok(_) => true,
                     Err(e) => {
                         error!("Error receiving key for {} : {}", fp, e);
                         false
                     }
                 })
-                .all(|success| success)
             {
                 Ok(())
             } else {

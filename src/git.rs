@@ -399,7 +399,7 @@ impl LiveGit {
                     .map(|tag_names| {
                         tag_names
                             .iter()
-                            .filter_map(|maybe_tag_name| maybe_tag_name)
+                            .flatten()
                             .filter_map(|tag_name| {
                                 self.repo
                                     .revparse_single(tag_name)
