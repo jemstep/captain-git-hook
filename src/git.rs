@@ -394,24 +394,17 @@ impl LiveGit {
         tag_cache
             .entry(pattern.clone())
             .or_insert_with(|| {
-                let all_tag_names = self.repo.tag_names(pattern.as_deref()).ok();
-                let libgit_tags = all_tag_names
-                    .map(|tag_names| {
-                        tag_names
-                            .iter()
-                            .flatten()
-                            .filter_map(|tag_name| {
-                                self.repo
-                                    .revparse_single(tag_name)
-                                    .and_then(|git_obj| git_obj.peel_to_tag())
-                                    .ok()
-                            })
-                            .collect::<Vec<_>>()
-                    })
-                    .unwrap_or(Vec::new());
-
-                let tags: HashMap<Oid, Vec<Tag>> = libgit_tags
+                self.repo
+                    .tag_names(pattern.as_deref())
+                    .ok()
                     .iter()
+                    .flat_map(|tag_names| tag_names.iter().flatten())
+                    .filter_map(|tag_name| {
+                        self.repo
+                            .revparse_single(tag_name)
+                            .and_then(|git_obj| git_obj.peel_to_tag())
+                            .ok()
+                    })
                     .filter(|tag| tag.target_type() == Some(ObjectType::Commit))
                     .fold(HashMap::new(), |mut map, tag| {
                         map.entry(tag.target_id())
@@ -424,9 +417,7 @@ impl LiveGit {
                                     .and_then(|signature| signature.email().map(|s| s.to_string())),
                             });
                         map
-                    });
-
-                tags
+                    })
             })
             .get(&commit_id)
             .cloned()
