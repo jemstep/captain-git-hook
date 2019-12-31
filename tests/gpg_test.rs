@@ -1,19 +1,59 @@
 use capn::gpg::*;
-use std::collections::HashSet;
+use capn::keyring::{Fingerprint, Keyring};
+use std::collections::{HashMap, HashSet};
 
 #[test]
-fn call_for_fingerprints_completes_successfully() {
-    let fingerprintids = LiveGpg::fingerprints();
-    println!("{:?}", fingerprintids);
-    assert!(fingerprintids.is_ok());
+fn receive_keys_attempts_to_fetch_unfetched_keys() {
+    let mut keyring = Keyring {
+        fingerprints: HashMap::new(),
+    };
+    keyring.fingerprints.insert(
+        "test@jemstep.com".to_string(),
+        Fingerprint {
+            id: "1212121212121212112".to_string(),
+            name: "Test User".to_string(),
+            email: "test@jemstep.com".to_string(),
+            public_key_is_available_locally: false,
+        },
+    );
+
+    let mut emails = HashSet::new();
+    emails.insert("test@jemstep.com");
+
+    let result = LiveGpg {
+        parallel_fetch: true,
+        keyserver: "keyserver".to_string(),
+    }
+    .receive_keys(&mut keyring, &emails);
+
+    // This key is made up, and the keyserver isn't valid, so this won't pass ever
+    assert!(result.is_err());
 }
 
 #[test]
-#[ignore = "This test takes a long time to run"]
-fn receive_keys() {
-    let mut fingerprints = HashSet::new();
-    fingerprints.insert("1212121212121212112".to_string());
-    let result = LiveGpg::receive_keys("keyserver", &fingerprints);
-    println!("Status {:?}", result);
+fn receive_keys_does_not_fetch_already_fetched_keys() {
+    let mut keyring = Keyring {
+        fingerprints: HashMap::new(),
+    };
+    keyring.fingerprints.insert(
+        "test@jemstep.com".to_string(),
+        Fingerprint {
+            id: "1212121212121212112".to_string(),
+            name: "Test User".to_string(),
+            email: "test@jemstep.com".to_string(),
+            public_key_is_available_locally: true,
+        },
+    );
+
+    let mut emails = HashSet::new();
+    emails.insert("test@jemstep.com");
+
+    let result = LiveGpg {
+        parallel_fetch: true,
+        keyserver: "keyserver".to_string(),
+    }
+    .receive_keys(&mut keyring, &emails);
+
+    // This key is made up, so this is successful only if there was no request made
     assert!(result.is_ok());
 }

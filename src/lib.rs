@@ -16,10 +16,10 @@ use crate::policies::*;
 
 pub mod config;
 pub mod error;
-pub mod fingerprints;
 pub mod fs;
 pub mod git;
 pub mod gpg;
+pub mod keyring;
 pub mod logger;
 pub mod policies;
 
@@ -66,6 +66,7 @@ pub fn prepare_commit_msg<F: Fs, G: Git>(
 }
 
 pub fn pre_push<G: Git, P: Gpg>(
+    gpg: P,
     _opt: &PrePush,
     config: &Config,
     local_ref: &str,
@@ -76,13 +77,14 @@ pub fn pre_push<G: Git, P: Gpg>(
     vec![config
         .verify_git_commits
         .as_ref()
-        .map(|c| verify_git_commits::<G, P>(c, remote_sha, local_sha, local_ref))]
+        .map(|c| verify_git_commits::<G, P>(gpg, c, remote_sha, local_sha, local_ref))]
     .into_iter()
     .flatten()
     .collect()
 }
 
 pub fn pre_receive<G: Git, P: Gpg>(
+    gpg: P,
     config: &Config,
     old_value: &str,
     new_value: &str,
@@ -91,7 +93,7 @@ pub fn pre_receive<G: Git, P: Gpg>(
     vec![config
         .verify_git_commits
         .as_ref()
-        .map(|c| verify_git_commits::<G, P>(c, old_value, new_value, ref_name))]
+        .map(|c| verify_git_commits::<G, P>(gpg, c, old_value, new_value, ref_name))]
     .into_iter()
     .flatten()
     .collect()

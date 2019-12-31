@@ -1,53 +1,96 @@
 use crate::error::CapnError;
+use crate::keyring::Keyring;
 use std::collections::HashSet;
 use std::error::Error;
 use std::process::*;
+use std::time::Instant;
 
 use log::*;
 use rayon::prelude::*;
 
 pub trait Gpg {
-    fn fingerprints() -> Result<Vec<String>, Box<dyn Error>>;
-    fn receive_key(key_server: &str, fingerprint: &str) -> Result<(), Box<dyn Error>>;
-    fn receive_keys(key_server: &str, fingerprints: &HashSet<String>)
-        -> Result<(), Box<dyn Error>>;
-    fn par_receive_keys(
-        key_server: &str,
-        fingerprints: &HashSet<String>,
+    fn receive_keys(
+        &self,
+        keyring: &mut Keyring,
+        emails: &HashSet<&str>,
     ) -> Result<(), Box<dyn Error>>;
 }
 
-pub struct LiveGpg {}
+pub struct LiveGpg {
+    pub parallel_fetch: bool,
+    pub keyserver: String,
+}
 
 impl Gpg for LiveGpg {
-    fn fingerprints() -> Result<Vec<String>, Box<dyn Error>> {
-        let result = Command::new("gpg")
-            .arg("--with-colons")
-            .arg("--fingerprint")
-            .output()?;
+    fn receive_keys(
+        &self,
+        keyring: &mut Keyring,
+        emails: &HashSet<&str>,
+    ) -> Result<(), Box<dyn Error>> {
+        let start = Instant::now();
 
-        if !result.status.success() {
-            return Err(Box::new(CapnError::new(format!(
-                "Call to GPG failed with status {}",
-                result.status
-            ))));
+        let fingerprints: Vec<String> = emails
+            .iter()
+            .filter(|email| keyring.requires_public_key_download(email))
+            .filter_map(|email| keyring.fingerprint_id_from_email(email))
+            .collect();
+
+        let fetch_result = if self.parallel_fetch {
+            if fingerprints
+                .par_iter()
+                .all(|fp| match self.receive_key(fp) {
+                    Ok(_) => true,
+                    Err(e) => {
+                        error!("Error receiving key for {} : {}", fp, e);
+                        false
+                    }
+                })
+            {
+                Ok(())
+            } else {
+                Err(Box::new(CapnError::new(
+                    "Error fetching GPG key".to_string(),
+                )))
+            }
+        } else {
+            let result = Command::new("gpg")
+                .args(&["--keyserver", &self.keyserver])
+                .arg("--recv-keys")
+                .args(fingerprints)
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()?;
+
+            if result.success() {
+                Ok(())
+            } else {
+                Err(Box::new(CapnError::new(format!(
+                    "Call to GPG keyserver failed with code {:?}",
+                    result.code()
+                ))))
+            }
+        };
+
+        if let Ok(_) = fetch_result {
+            keyring.mark_public_keys_available(emails);
         }
 
-        let encoded = String::from_utf8(result.stdout)?;
-        let per_line = encoded
-            .split('\n')
-            .filter(|s| s.starts_with("fpr"))
-            .filter_map(|s| s.split(':').nth(9).map(String::from))
-            .collect::<Vec<_>>();
+        trace!(
+            "GPG receive_keys completed in: {} ms",
+            start.elapsed().as_millis()
+        );
 
-        Ok(per_line)
+        fetch_result?;
+        Ok(())
     }
+}
 
-    fn receive_key(key_server: &str, fingerprint: &str) -> Result<(), Box<dyn Error>> {
+impl LiveGpg {
+    fn receive_key(&self, fingerprint: &str) -> Result<(), Box<dyn Error>> {
         debug!("Receiving key for fingerprint {:?}", fingerprint);
 
         let result = Command::new("gpg")
-            .args(&["--keyserver", key_server])
+            .args(&["--keyserver", &self.keyserver])
             .arg("--recv-keys")
             .arg(fingerprint)
             .stdout(Stdio::null())
@@ -63,80 +106,20 @@ impl Gpg for LiveGpg {
             ))))
         }
     }
-
-    fn receive_keys(
-        key_server: &str,
-        fingerprints: &HashSet<String>,
-    ) -> Result<(), Box<dyn Error>> {
-        let result = Command::new("gpg")
-            .args(&["--keyserver", key_server])
-            .arg("--recv-keys")
-            .args(fingerprints)
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()?;
-
-        if result.success() {
-            Ok(())
-        } else {
-            Err(Box::new(CapnError::new(format!(
-                "Call to GPG keyserver failed with code {:?}",
-                result.code()
-            ))))
-        }
-    }
-
-    fn par_receive_keys(
-        key_server: &str,
-        fingerprints: &HashSet<String>,
-    ) -> Result<(), Box<dyn Error>> {
-        let _r: Vec<_> = fingerprints
-            .par_iter()
-            .map(|fp| {
-                match Self::receive_key(&key_server, fp) {
-                    Ok(o) => o,
-                    Err(e) => error!("Error receiving key for {} : {}", fp, e),
-                };
-            })
-            .collect();
-        Ok(())
-    }
 }
 
-#[cfg(test)]
-mod test {
+pub mod test {
     use super::*;
 
-    pub struct MockGpg {}
+    pub struct MockGpg;
     impl Gpg for MockGpg {
-        fn fingerprints() -> Result<Vec<String>, Box<dyn Error>> {
-            Ok(vec![String::from(
-                "111111111111111111111111111111111111111111",
-            )])
-        }
-        fn receive_key(_key_server: &str, _fingerprint: &str) -> Result<(), Box<dyn Error>> {
-            Ok(())
-        }
         fn receive_keys(
-            _key_server: &str,
-            _fingerprints: &HashSet<String>,
+            &self,
+            keyring: &mut Keyring,
+            emails: &HashSet<&str>,
         ) -> Result<(), Box<dyn Error>> {
+            keyring.mark_public_keys_available(emails);
             Ok(())
         }
-        fn par_receive_keys(
-            _key_server: &str,
-            _fingerprints: &HashSet<String>,
-        ) -> Result<(), Box<dyn Error>> {
-            Ok(())
-        }
-    }
-
-    #[test]
-    fn list_fingerprints() {
-        let result = MockGpg::fingerprints().unwrap();
-        assert_eq!(
-            vec!(String::from("111111111111111111111111111111111111111111")),
-            result
-        );
     }
 }

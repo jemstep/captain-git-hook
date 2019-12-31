@@ -15,8 +15,6 @@ pub struct VerifyGitCommitsConfig {
     pub team_fingerprints_file: String,
     #[serde(default = "default_true")]
     pub recv_keys_par: bool,
-    #[serde(default = "default_false")]
-    pub skip_recv_keys: bool,
     #[serde(default = "default_true")]
     pub verify_email_addresses: bool,
     #[serde(default = "default_true")]
@@ -24,6 +22,11 @@ pub struct VerifyGitCommitsConfig {
 
     #[serde(default = "default_false")]
     pub verify_different_authors: bool,
+
+    #[serde(default)]
+    pub override_tag_pattern: Option<String>,
+    #[serde(default = "default_two")]
+    pub override_tags_required: u8,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -35,6 +38,10 @@ fn default_true() -> bool {
 
 fn default_false() -> bool {
     false
+}
+
+fn default_two() -> u8 {
+    2
 }
 
 impl Config {

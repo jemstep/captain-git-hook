@@ -1,12 +1,12 @@
 use crate::config::VerifyGitCommitsConfig;
-use crate::fingerprints::*;
 use crate::fs::*;
 use crate::git::*;
 use crate::gpg::*;
+use crate::keyring::*;
 
-use git2::{Commit, Oid};
+use git2::Oid;
 use rayon::prelude::*;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::error::Error;
 use std::fmt;
 use std::iter;
@@ -82,6 +82,7 @@ pub fn prepend_branch_name<F: Fs, G: Git>(
 }
 
 pub fn verify_git_commits<G: Git, P: Gpg>(
+    gpg: P,
     config: &VerifyGitCommitsConfig,
     old_value: &str,
     new_value: &str,
@@ -100,28 +101,43 @@ pub fn verify_git_commits<G: Git, P: Gpg>(
     } else if git.is_tag(new_commit_id) {
         debug!("Tag detected, no commits to verify.")
     } else {
-        let commits = commits_to_verify(&git, old_commit_id, new_commit_id)?;
+        let commits = commits_to_verify(
+            &git,
+            old_commit_id,
+            new_commit_id,
+            &config.override_tag_pattern,
+        )?;
 
         debug!("Number of commits to verify {} : ", commits.len());
         for commit in &commits {
-            G::debug_commit(&commit)
+            debug!("{:?}", commit);
         }
 
-        let commit_fingerprints =
-            git.find_commit_fingerprints(&config.team_fingerprints_file, &commits)?;
-        let fingerprint_ids = commit_fingerprints.values().map(|f| f.id.clone()).collect();
+        let mut keyring =
+            Keyring::from_team_fingerprints_file(git.read_file(&config.team_fingerprints_file)?);
 
-        if config.skip_recv_keys {
-            debug!("Skipping importing GPG keys");
-        } else {
-            debug!("Fetching GPG public keys from {}", config.keyserver);
+        let exclusions = find_and_verify_override_tags(
+            &git,
+            &gpg,
+            &commits,
+            config.override_tags_required,
+            &mut keyring,
+        )?;
+        let commits = commits_to_verify_with_exclusions(
+            &git,
+            old_commit_id,
+            new_commit_id,
+            exclusions,
+            &config.override_tag_pattern,
+        )?;
 
-            if config.recv_keys_par {
-                let _result = P::par_receive_keys(&config.keyserver, &fingerprint_ids)?;
-            } else {
-                let _result = P::receive_keys(&config.keyserver, &fingerprint_ids)?;
-            }
-        }
+        gpg.receive_keys(
+            &mut keyring,
+            &commits
+                .iter()
+                .filter_map(|c| c.committer_email.as_deref())
+                .collect(),
+        )?;
 
         if config.verify_email_addresses {
             policy_result = policy_result.and(verify_email_addresses(
@@ -132,11 +148,8 @@ pub fn verify_git_commits<G: Git, P: Gpg>(
         }
 
         if config.verify_commit_signatures {
-            policy_result = policy_result.and(verify_commit_signatures::<G>(
-                &git,
-                &commits,
-                &commit_fingerprints,
-            )?);
+            policy_result =
+                policy_result.and(verify_commit_signatures::<G>(&git, &commits, &keyring)?);
         }
 
         if config.verify_different_authors {
@@ -162,113 +175,135 @@ fn commits_to_verify<'a, G: Git>(
     git: &'a G,
     old_commit_id: Oid,
     new_commit_id: Oid,
-) -> Result<Vec<Commit<'a>>, Box<dyn Error>> {
-    if old_commit_id.is_zero() {
-        debug!("New branch detected");
-        git.find_unpushed_commits(new_commit_id)
-    } else {
-        git.find_commits(old_commit_id, new_commit_id)
+
+    override_tag_pattern: &Option<String>,
+) -> Result<Vec<Commit>, Box<dyn Error>> {
+    git.find_commits(&[old_commit_id], &[new_commit_id], override_tag_pattern)
+}
+
+fn commits_to_verify_with_exclusions<'a, G: Git>(
+    git: &'a G,
+    old_commit_id: Oid,
+    new_commit_id: Oid,
+    mut exclusions: Vec<Oid>,
+    override_tag_pattern: &Option<String>,
+) -> Result<Vec<Commit>, Box<dyn Error>> {
+    exclusions.push(old_commit_id);
+    git.find_commits(&exclusions, &[new_commit_id], override_tag_pattern)
+}
+
+fn find_and_verify_override_tags<G: Git, P: Gpg>(
+    git: &G,
+    gpg: &P,
+    commits: &Vec<Commit>,
+    required_tags: u8,
+    keyring: &mut Keyring,
+) -> Result<Vec<Oid>, Box<dyn Error>> {
+    let repo_path = git.path();
+    gpg.receive_keys(
+        keyring,
+        &commits
+            .iter()
+            .filter(|c| c.tags.len() >= required_tags.into())
+            .flat_map(|c| c.tags.iter().flat_map(|t| t.tagger_email.as_deref()))
+            .collect(),
+    )?;
+
+    let tagged_commits = commits
+        .iter()
+        .filter(|c| c.tags.len() >= required_tags.into())
+        .filter_map(|c| {
+            let verified_taggers = c
+                .tags
+                .iter()
+                .filter(|t| verify_tag_logging_errors::<G>(&repo_path, t, keyring))
+                .filter_map(|t| t.tagger_email.as_ref())
+                .collect::<HashSet<_>>();
+
+            if verified_taggers.len() >= required_tags.into() {
+                info!("Override tags found for {}. Tags created by {:?}. This commit, and it's ancestors, do not require validation.", c.id, verified_taggers);
+                Some(c.id)
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    Ok(tagged_commits)
+}
+
+fn verify_tag_logging_errors<G: Git>(
+    repo_path: &std::path::Path,
+    tag: &Tag,
+    keyring: &Keyring,
+) -> bool {
+    match G::verify_tag_signature(repo_path, tag, keyring) {
+        Ok(result) => result,
+        Err(e) => {
+            error!(
+                "Technical error occurred while trying to validate tag {}. Error: {}",
+                tag.name, e
+            );
+            false
+        }
     }
 }
 
 fn verify_commit_signatures<G: Git>(
     git: &G,
-    commits: &Vec<Commit<'_>>,
-    fingerprints: &HashMap<String, Fingerprint>,
+    commits: &[Commit],
+    keyring: &Keyring,
 ) -> Result<PolicyResult, Box<dyn Error>> {
-    let verification_commits: HashMap<String, VerificationCommit> =
-        generate_verification_commits(git, commits, fingerprints);
+    let repo_path = git.path();
+    let commits_with_verified_signatures: HashSet<Oid> = commits
+        .par_iter()
+        .filter(|commit| {
+            match G::verify_commit_signature(repo_path, &commit, keyring) {
+                Ok(result) => result,
+                Err(e) => {
+                    error!(
+                        "Technical error occurred while trying to validate commit signature {}. Error: {}",
+                           commit.id, e
+                    );
+                    false
+                }
+            }
+        })
+        .map(|commit| commit.id)
+        .collect();
 
     commits.iter()
         .map(|commit| {
-            let verification_commit = verification_commits.get(&commit.id().to_string());
-            match verification_commit {
-                Some(vc) => {
-                    if vc.is_identical_tree {
-                        info!("Signature verification passed for {}: verified identical to one of its parents, no signature required", commit.id());
-                        Ok(PolicyResult::Ok)
-                    } else if vc.valid_signature {
-                        info!("Signature verification passed for {}: verified with a valid signature", commit.id());
-                        Ok(PolicyResult::Ok)
-                    } else if git.is_trivial_merge_commit(commit)? {
-                        info!("Signature verification passed for {}: verified to be a trivial merge of its parents, no signature required", commit.id());
-                        Ok(PolicyResult::Ok)
-                    }  else {
-                        error!("Signature verification failed for {}", commit.id());
-                        if G::merge_commit(&commit) {
-                            Ok(PolicyResult::UnsignedMergeCommit(commit.id()))
-                        } else {
-                            Ok(PolicyResult::UnsignedCommit(commit.id()))
-                        }
-                    }
-                },
-                None => {
-                    error!("Signature verification failed for {}, verification commit not found", commit.id());
-                    if G::merge_commit(&commit) {
-                        Ok(PolicyResult::UnsignedMergeCommit(commit.id()))
-                    } else {
-                        Ok(PolicyResult::UnsignedCommit(commit.id()))
-                    }
+            if commit.is_identical_tree_to_any_parent {
+                info!("Signature verification passed for {}: verified identical to one of its parents, no signature required", commit.id);
+                Ok(PolicyResult::Ok)
+            } else if commits_with_verified_signatures.contains(&commit.id) {
+                info!("Signature verification passed for {}: verified with a valid signature", commit.id);
+                Ok(PolicyResult::Ok)
+            } else if git.is_trivial_merge_commit(commit)? {
+                info!("Signature verification passed for {}: verified to be a trivial merge of its parents, no signature required", commit.id);
+                Ok(PolicyResult::Ok)
+            }  else {
+                error!("Signature verification failed for {}", commit.id);
+                if commit.is_merge_commit {
+                    Ok(PolicyResult::UnsignedMergeCommit(commit.id))
+                } else {
+                    Ok(PolicyResult::UnsignedCommit(commit.id))
                 }
             }
         })
         .collect()
 }
 
-fn generate_verification_commits<G: Git>(
-    git: &G,
-    commits: &Vec<Commit<'_>>,
-    fingerprints: &HashMap<String, Fingerprint>,
-) -> HashMap<String, VerificationCommit> {
-    let verification_commits: HashMap<String, VerificationCommit> = commits
-        .iter()
-        .map(|commit| {
-            let committer = commit.committer();
-            let committer_email = committer.email().map(|s| s.to_string());
-            let fingerprint = committer_email
-                .clone()
-                .and_then(|s| fingerprints.get(&s).map(|f| f.id.to_string()));
-            (
-                commit.id().to_string(),
-                VerificationCommit {
-                    id: commit.id().to_string(),
-                    committer_email: committer_email,
-                    is_identical_tree: G::is_identical_tree_to_any_parent(commit),
-                    valid_signature: false,
-                    fingerprint: fingerprint,
-                },
-            )
-        })
-        .collect();
-
-    let repo_path = git.path();
-
-    let checked_verification_commits: HashMap<String, VerificationCommit> = verification_commits
-        .into_par_iter()
-        .map(|(k, v)| {
-            let valid_signature = G::verify_commit_signature(repo_path, &v);
-            (
-                k,
-                VerificationCommit {
-                    valid_signature: valid_signature.unwrap_or(false),
-                    ..v
-                },
-            )
-        })
-        .collect();
-    checked_verification_commits
-}
-
 fn verify_different_authors<G: Git>(
-    commits: &Vec<Commit<'_>>,
+    commits: &[Commit],
     git: &G,
     old_commit_id: Oid,
     new_commit_id: Oid,
     ref_name: &str,
 ) -> Result<PolicyResult, Box<dyn Error>> {
-    let new_commit = git.find_commit(new_commit_id)?;
     let new_branch = old_commit_id.is_zero();
-    let is_merge = G::merge_commit(&new_commit);
+    let is_merge = git.is_merge_commit(new_commit_id);
     let is_head = git.is_head(ref_name)?;
 
     if !is_head {
@@ -286,7 +321,12 @@ fn verify_different_authors<G: Git>(
     } else {
         let authors: HashSet<_> = commits
             .iter()
-            .filter_map(|c| c.author().email().map(|e| e.to_string()))
+            .flat_map(|c| {
+                c.tags
+                    .iter()
+                    .filter_map(|t| t.tagger_email.as_ref())
+                    .chain(c.author_email.as_ref())
+            })
             .collect();
         if authors.len() <= 1 {
             error!(
@@ -307,44 +347,44 @@ fn verify_different_authors<G: Git>(
 fn verify_email_addresses(
     author_domain: &str,
     committer_domain: &str,
-    commits: &Vec<Commit<'_>>,
+    commits: &[Commit],
 ) -> PolicyResult {
     commits
         .iter()
         .map(
-            |commit| match (commit.author().email(), commit.committer().email()) {
+            |commit| match (&commit.author_email, &commit.committer_email) {
                 (None, _) => {
                     error!(
                         "Email address verification failed for {}: missing author email",
-                        commit.id()
+                        commit.id
                     );
-                    PolicyResult::MissingAuthorEmail(commit.id())
+                    PolicyResult::MissingAuthorEmail(commit.id)
                 }
                 (_, None) => {
                     error!(
                         "Email address verification failed for {}: missing committer email",
-                        commit.id()
+                        commit.id
                     );
-                    PolicyResult::MissingCommitterEmail(commit.id())
+                    PolicyResult::MissingCommitterEmail(commit.id)
                 }
                 (Some(s), _) if !s.ends_with(&format!("@{}", author_domain)) => {
                     error!(
                         "Email address verification failed for {}: invalid author email {}",
-                        commit.id(),
+                        commit.id,
                         s.to_string()
                     );
-                    PolicyResult::InvalidAuthorEmail(commit.id(), s.to_string())
+                    PolicyResult::InvalidAuthorEmail(commit.id, s.to_string())
                 }
                 (_, Some(s)) if !s.ends_with(&format!("@{}", committer_domain)) => {
                     error!(
                         "Email address verification failed for {}: invalid committer email {}",
-                        commit.id(),
+                        commit.id,
                         s.to_string()
                     );
-                    PolicyResult::InvalidCommitterEmail(commit.id(), s.to_string())
+                    PolicyResult::InvalidCommitterEmail(commit.id, s.to_string())
                 }
                 _ => {
-                    info!("Email address verification passed for {}", commit.id());
+                    info!("Email address verification passed for {}", commit.id);
                     PolicyResult::Ok
                 }
             },
