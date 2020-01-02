@@ -101,15 +101,15 @@ pub fn verify_git_commits<G: Git, P: Gpg>(
     } else if git.is_tag(new_commit_id) {
         debug!("Tag detected, no commits to verify.")
     } else {
-        let commits = commits_to_verify(
+        let all_commits = commits_to_verify(
             &git,
             old_commit_id,
             new_commit_id,
             &config.override_tag_pattern,
         )?;
 
-        debug!("Number of commits to verify {} : ", commits.len());
-        for commit in &commits {
+        debug!("Number of commits to verify {} : ", all_commits.len());
+        for commit in &all_commits {
             debug!("{:?}", commit);
         }
 
@@ -119,11 +119,11 @@ pub fn verify_git_commits<G: Git, P: Gpg>(
         let exclusions = find_and_verify_override_tags(
             &git,
             &gpg,
-            &commits,
+            &all_commits,
             config.override_tags_required,
             &mut keyring,
         )?;
-        let commits = commits_to_verify_with_exclusions(
+        let commits_without_exclusions = commits_to_verify_with_exclusions(
             &git,
             old_commit_id,
             new_commit_id,
@@ -133,7 +133,7 @@ pub fn verify_git_commits<G: Git, P: Gpg>(
 
         gpg.receive_keys(
             &mut keyring,
-            &commits
+            &commits_without_exclusions
                 .iter()
                 .filter_map(|c| c.committer_email.as_deref())
                 .collect(),
@@ -143,18 +143,21 @@ pub fn verify_git_commits<G: Git, P: Gpg>(
             policy_result = policy_result.and(verify_email_addresses(
                 &config.author_domain,
                 &config.committer_domain,
-                &commits,
+                &commits_without_exclusions,
             ));
         }
 
         if config.verify_commit_signatures {
-            policy_result =
-                policy_result.and(verify_commit_signatures::<G>(&git, &commits, &keyring)?);
+            policy_result = policy_result.and(verify_commit_signatures::<G>(
+                &git,
+                &commits_without_exclusions,
+                &keyring,
+            )?);
         }
 
         if config.verify_different_authors {
             policy_result = policy_result.and(verify_different_authors::<G>(
-                &commits,
+                &all_commits,
                 &git,
                 old_commit_id,
                 new_commit_id,
