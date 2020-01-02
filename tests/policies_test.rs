@@ -261,6 +261,20 @@ fn verify_git_commits_author_merged_own_code_on_head() {
 }
 
 #[test]
+fn verify_git_commits_author_merged_own_code_on_head_with_tag() {
+    before_all();
+    let result = policies::verify_git_commits::<LiveGit, MockGpg>(
+        MockGpg,
+        &verify_commits_config(),
+        "eb5e0185546b0bb1a13feec6b9ee8b39985fea42",
+        "e5924d0748c8852d74049679b34ca4b3b0570d0d",
+        "refs/heads/master",
+    )
+    .unwrap();
+    assert!(result.is_ok());
+}
+
+#[test]
 fn verify_tagged_git_commits_override_rules() {
     before_all();
     let result = policies::verify_git_commits::<LiveGit, MockGpg>(
