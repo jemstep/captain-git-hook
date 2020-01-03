@@ -101,60 +101,56 @@ pub fn verify_git_commits<G: Git, P: Gpg>(
     } else if git.is_tag(new_commit_id) {
         debug!("Tag detected, no commits to verify.")
     } else {
-        let commits = commits_to_verify(
+        let all_commits = commits_to_verify(
             &git,
             old_commit_id,
             new_commit_id,
             &config.override_tag_pattern,
         )?;
 
-        debug!("Number of commits to verify {} : ", commits.len());
-        for commit in &commits {
+        debug!("Number of commits to verify {} : ", all_commits.len());
+        for commit in &all_commits {
             debug!("{:?}", commit);
         }
 
         let mut keyring =
             Keyring::from_team_fingerprints_file(git.read_file(&config.team_fingerprints_file)?);
 
-        let exclusions = find_and_verify_override_tags(
+        let manually_verified_commmits = find_and_verify_override_tags(
             &git,
             &gpg,
-            &commits,
+            &all_commits,
             config.override_tags_required,
             &mut keyring,
         )?;
-        let commits = commits_to_verify_with_exclusions(
+        let not_manually_verified_commits = commits_to_verify_excluding_manually_verified(
             &git,
             old_commit_id,
             new_commit_id,
-            exclusions,
+            manually_verified_commmits,
             &config.override_tag_pattern,
-        )?;
-
-        gpg.receive_keys(
-            &mut keyring,
-            &commits
-                .iter()
-                .filter_map(|c| c.committer_email.as_deref())
-                .collect(),
         )?;
 
         if config.verify_email_addresses {
             policy_result = policy_result.and(verify_email_addresses(
                 &config.author_domain,
                 &config.committer_domain,
-                &commits,
+                &not_manually_verified_commits,
             ));
         }
 
         if config.verify_commit_signatures {
-            policy_result =
-                policy_result.and(verify_commit_signatures::<G>(&git, &commits, &keyring)?);
+            policy_result = policy_result.and(verify_commit_signatures::<G, P>(
+                &git,
+                &gpg,
+                &not_manually_verified_commits,
+                &mut keyring,
+            )?);
         }
 
         if config.verify_different_authors {
             policy_result = policy_result.and(verify_different_authors::<G>(
-                &commits,
+                &all_commits,
                 &git,
                 old_commit_id,
                 new_commit_id,
@@ -171,25 +167,25 @@ pub fn verify_git_commits<G: Git, P: Gpg>(
     Ok(policy_result)
 }
 
-fn commits_to_verify<'a, G: Git>(
-    git: &'a G,
+fn commits_to_verify<G: Git>(
+    git: &G,
     old_commit_id: Oid,
     new_commit_id: Oid,
-
     override_tag_pattern: &Option<String>,
 ) -> Result<Vec<Commit>, Box<dyn Error>> {
     git.find_commits(&[old_commit_id], &[new_commit_id], override_tag_pattern)
 }
 
-fn commits_to_verify_with_exclusions<'a, G: Git>(
-    git: &'a G,
+fn commits_to_verify_excluding_manually_verified<G: Git>(
+    git: &G,
     old_commit_id: Oid,
     new_commit_id: Oid,
-    mut exclusions: Vec<Oid>,
+    manually_verified: Vec<Oid>,
     override_tag_pattern: &Option<String>,
 ) -> Result<Vec<Commit>, Box<dyn Error>> {
-    exclusions.push(old_commit_id);
-    git.find_commits(&exclusions, &[new_commit_id], override_tag_pattern)
+    let mut to_exclude = manually_verified;
+    to_exclude.push(old_commit_id);
+    git.find_commits(&to_exclude, &[new_commit_id], override_tag_pattern)
 }
 
 fn find_and_verify_override_tags<G: Git, P: Gpg>(
@@ -249,11 +245,20 @@ fn verify_tag_logging_errors<G: Git>(
     }
 }
 
-fn verify_commit_signatures<G: Git>(
+fn verify_commit_signatures<G: Git, P: Gpg>(
     git: &G,
+    gpg: &P,
     commits: &[Commit],
-    keyring: &Keyring,
+    keyring: &mut Keyring,
 ) -> Result<PolicyResult, Box<dyn Error>> {
+    gpg.receive_keys(
+        keyring,
+        &commits
+            .iter()
+            .filter_map(|c| c.committer_email.as_deref())
+            .collect(),
+    )?;
+
     let repo_path = git.path();
     let commits_with_verified_signatures: HashSet<Oid> = commits
         .par_iter()

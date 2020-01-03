@@ -41,10 +41,6 @@ pub trait Git: Sized {
     ) -> Result<(), Box<dyn Error>>;
     fn current_branch(&self) -> Result<String, Box<dyn Error>>;
     fn is_tag(&self, id: Oid) -> bool;
-    fn find_unpushed_commits(
-        &self,
-        new_commit_id: Oid,
-    ) -> Result<Vec<git2::Commit<'_>>, Box<dyn Error>>;
     fn find_commit(
         &self,
         commit_id: Oid,
@@ -206,24 +202,6 @@ impl Git for LiveGit {
                     .and_then(|id| self.find_commit(id, override_tag_pattern))
             })
             .collect::<Result<Vec<_>, _>>()?;
-
-        Ok(commits)
-    }
-
-    fn find_unpushed_commits(
-        &self,
-        new_commit_id: Oid,
-    ) -> Result<Vec<git2::Commit<'_>>, Box<dyn Error>> {
-        debug!("Get unpushed commits from {} ", new_commit_id);
-
-        let mut revwalk = self.repo.revwalk()?;
-        revwalk.push(new_commit_id)?;
-        revwalk.hide_head()?;
-
-        let commits = revwalk
-            .into_iter()
-            .map(|id| id.and_then(|id| self.repo.find_commit(id)))
-            .collect::<Result<Vec<_>, git2::Error>>()?;
 
         Ok(commits)
     }
