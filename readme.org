@@ -140,6 +140,46 @@ git push <remote> <tag-name>
 #+END_SRC
 
 * Development
+** High level architecture
+
+On a high level, Captain Git Hook is a collection of Git Hooks, linked
+to Policies, controlled by Configuration.
+
+The Git Hook is the event that runs the application. Which hook is run
+will depend on what is currently going on in Git. Each hook has a
+hardcoded list of all the policies that make sense for the hook. For
+example, it wouldn't ever make sense to verify GPG signatures on
+commits in a pre-commit hook (there is no commit to check yet), and it
+wouldn't make sense to create a commit messge template in a
+pre-receive hook.
+
+Each policy gets the config from the .capn file. If the .capn file
+doesn't have the configuration for the policy, then that policy is
+disabled and it does not get applied.
+
+A hook has been successfully run if all of the policies that were
+turned on in the configuration passed successfully.
+
+#+BEGIN_SRC dot :file architecture.svg :exports results
+  digraph {
+    hooks [
+      shape="record"
+      label="{Hooks|{pre-receive|pre-push|prepare-commit-msg}}"
+    ]
+    policies [
+      shape="record"
+      label="{Policies|{verify git commits|verify different authors|prepend branch name}}"
+    ]
+
+    config [ shape="rect", label="Configuration" ]
+
+    hooks -> policies [label="  triggers"]
+    policies -> config [label="  controlled by"]
+  }
+#+END_SRC
+
+#+RESULTS:
+[[file:architecture.svg]]
 
 ** Integration tests
 Some of the end to end tests require a valid Git repository and GPG

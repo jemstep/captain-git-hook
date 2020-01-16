@@ -55,7 +55,13 @@ fn main() {
     let quiet = opt.logging.quiet;
     Logger::init(opt.logging);
 
-    logger::print_header("Ahoy, maties! Welcome to Capn Githook!", quiet);
+    logger::print_header(
+        format!(
+            "Ahoy, maties! Welcome to Capn Githook {}!",
+            env!("CARGO_PKG_VERSION")
+        ),
+        quiet,
+    );
 
     let git = match LiveGit::new() {
         Ok(g) => g,
