@@ -1,5 +1,5 @@
 use capn;
-use capn::config::{Config, VerifyGitCommitsConfig};
+use capn::config::{Config, GitConfig, VerifyGitCommitsConfig};
 use capn::policies;
 
 use capn::git::LiveGit;
@@ -63,6 +63,7 @@ fn verify_commits_config() -> VerifyGitCommitsConfig {
 fn verify_git_commits_happy_path_from_empty_through_pre_receive() {
     before_all();
     let config = Config {
+        git: GitConfig::default(),
         prepend_branch_name: None,
         verify_git_commits: Some(verify_commits_config()),
     };
