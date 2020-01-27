@@ -31,7 +31,6 @@ pub struct Tag {
 }
 
 pub trait Git: Sized {
-    fn new() -> Result<Self, Box<dyn Error>>;
     fn read_file(&self, path: &str) -> Result<String, Box<dyn Error>>;
     fn write_git_file(
         &self,
@@ -77,17 +76,10 @@ pub trait Git: Sized {
 pub struct LiveGit {
     repo: Repository,
     tag_cache: RefCell<HashMap<Option<String>, HashMap<Oid, Vec<Tag>>>>,
+    _config: GitConfig,
 }
 
 impl Git for LiveGit {
-    fn new() -> Result<Self, Box<dyn Error>> {
-        let repo = Repository::discover("./")?;
-        Ok(LiveGit {
-            repo,
-            tag_cache: RefCell::new(HashMap::new()),
-        })
-    }
-
     fn path(&self) -> &std::path::Path {
         self.repo.path()
     }
@@ -193,6 +185,7 @@ impl Git for LiveGit {
         for &exclusion in exclusions.iter().filter(|id| !id.is_zero()) {
             revwalk.hide(exclusion)?;
         }
+        // TODO: This needs to be all mainlines
         revwalk.hide_head()?;
 
         let commits = revwalk
@@ -348,6 +341,7 @@ impl Git for LiveGit {
     }
 
     fn is_head(&self, ref_name: &str) -> Result<bool, Box<dyn Error>> {
+        // TODO: Check all mainlines
         let head = self.repo.head()?;
         Ok(Some(ref_name) == head.name())
     }
@@ -361,6 +355,24 @@ impl Git for LiveGit {
 }
 
 impl LiveGit {
+    pub fn default() -> Result<Self, Box<dyn Error>> {
+        let repo = Repository::discover("./")?;
+        Ok(LiveGit {
+            repo,
+            tag_cache: RefCell::new(HashMap::new()),
+            _config: GitConfig::default(),
+        })
+    }
+
+    pub fn new(config: GitConfig) -> Result<Self, Box<dyn Error>> {
+        let repo = Repository::discover("./")?;
+        Ok(LiveGit {
+            repo,
+            tag_cache: RefCell::new(HashMap::new()),
+            _config: config,
+        })
+    }
+
     fn is_identical_tree_to_any_parent(commit: &git2::Commit<'_>) -> bool {
         let tree_id = commit.tree_id();
         commit.parents().any(|p| p.tree_id() == tree_id)

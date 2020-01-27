@@ -47,13 +47,14 @@ pub struct PrePush {
 }
 
 pub fn prepare_commit_msg<F: Fs, G: Git>(
+    git: &G,
     opt: PrepareCommitMsg,
     config: Config,
 ) -> Result<PolicyResult, Box<dyn Error>> {
     if opt.commit_source.is_none() {
         vec![config
             .prepend_branch_name
-            .map(|_| prepend_branch_name::<F, G>(opt.commit_file))]
+            .map(|_| prepend_branch_name::<F, G>(git, opt.commit_file))]
         .into_iter()
         .flatten()
         .collect()
@@ -66,6 +67,7 @@ pub fn prepare_commit_msg<F: Fs, G: Git>(
 }
 
 pub fn pre_push<G: Git, P: Gpg>(
+    git: &G,
     gpg: P,
     _opt: &PrePush,
     config: &Config,
@@ -77,13 +79,14 @@ pub fn pre_push<G: Git, P: Gpg>(
     vec![config
         .verify_git_commits
         .as_ref()
-        .map(|c| verify_git_commits::<G, P>(gpg, c, remote_sha, local_sha, local_ref))]
+        .map(|c| verify_git_commits::<G, P>(git, gpg, c, remote_sha, local_sha, local_ref))]
     .into_iter()
     .flatten()
     .collect()
 }
 
 pub fn pre_receive<G: Git, P: Gpg>(
+    git: &G,
     gpg: P,
     config: &Config,
     old_value: &str,
@@ -93,22 +96,21 @@ pub fn pre_receive<G: Git, P: Gpg>(
     vec![config
         .verify_git_commits
         .as_ref()
-        .map(|c| verify_git_commits::<G, P>(gpg, c, old_value, new_value, ref_name))]
+        .map(|c| verify_git_commits::<G, P>(git, gpg, c, old_value, new_value, ref_name))]
     .into_iter()
     .flatten()
     .collect()
 }
 
-pub fn install_hooks<G: Git>() -> Result<(), Box<dyn Error>> {
-    let repo = G::new()?;
-    repo.write_git_file(
+pub fn install_hooks<G: Git>(git: G) -> Result<(), Box<dyn Error>> {
+    git.write_git_file(
         "hooks/prepare-commit-msg",
         0o750,
         r#"#!/bin/sh
 capn prepare-commit-msg "$@"
 "#,
     )?;
-    repo.write_git_file(
+    git.write_git_file(
         "hooks/pre-push",
         0o750,
         r#"#!/bin/sh

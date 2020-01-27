@@ -63,18 +63,10 @@ fn main() {
         quiet,
     );
 
-    let git = match LiveGit::new() {
-        Ok(g) => g,
+    let config = match load_config() {
+        Ok(config) => config,
         Err(e) => {
-            error!("Failed to initialize Capn Githook. Error: {}\nPlease check that you are in a Git repo.", e);
-            exit(1);
-        }
-    };
-
-    let config = match git.read_config() {
-        Ok(c) => c,
-        Err(e) => {
-            error!("Failed to read the .capn config file.  Error: {}.\nPlease check that you are in a Git repo that has a .capn config file in the root of the repo.", e);
+            error!("Failed to initialize Capn Githook. Error: {}.\nPlease check that you are in a Git repo that has a .capn config file in the root of the repo.", e);
             exit(1);
         }
     };
@@ -99,11 +91,20 @@ fn main() {
     }
 }
 
+fn load_config() -> Result<Config, Box<dyn Error>> {
+    // This is a necessary bootstrapping step, because we need a Git
+    // object to load the config, which is used to initialize the Git
+    // object used for the rest of the run.
+    let default_git = LiveGit::default()?;
+    default_git.read_config()
+}
+
 fn execute_command(command: Command, config: Config) -> Result<PolicyResult, Box<dyn Error>> {
+    let git = LiveGit::new(config.git.clone())?;
     match command {
         Command::PrepareCommitMsg(args) => {
             info!("Calling prepare-commit-msg");
-            prepare_commit_msg::<LiveFs, LiveGit>(args, config)
+            prepare_commit_msg::<LiveFs, LiveGit>(&git, args, config)
         }
         Command::PrePush(args) => {
             info!("Calling pre-push");
@@ -113,7 +114,7 @@ fn execute_command(command: Command, config: Config) -> Result<PolicyResult, Box
                     match (fields.next(), fields.next(), fields.next(), fields.next()) {
                         (Some(local_ref), Some(local_sha), Some(remote_ref), Some(remote_sha)) => {
                             info!("Running pre-push for: {} {} {} {}", local_ref, local_sha, remote_ref, remote_sha);
-                            pre_push::<LiveGit, _>(build_gpg_client(&config), &args, &config, local_ref, local_sha, remote_ref, remote_sha)
+                            pre_push::<LiveGit, _>(&git, build_gpg_client(&config), &args, &config, local_ref, local_sha, remote_ref, remote_sha)
                         },
                         _ => {
                             warn!("Expected parameters not received on stdin. Line received was: {}", line);
@@ -132,7 +133,7 @@ fn execute_command(command: Command, config: Config) -> Result<PolicyResult, Box
                     match (fields.next(), fields.next(), fields.next()) {
                         (Some(old_value), Some(new_value), Some(ref_name)) => {
                             info!("Running pre-receive for: {} {} {}", old_value, new_value, ref_name);
-                            pre_receive::<LiveGit, _>(build_gpg_client(&config), &config, old_value, new_value, ref_name)
+                            pre_receive::<LiveGit, _>(&git, build_gpg_client(&config), &config, old_value, new_value, ref_name)
                         },
                         _ => {
                             warn!("Expected parameters not received on stdin. Line received was: {}", line);
@@ -143,7 +144,7 @@ fn execute_command(command: Command, config: Config) -> Result<PolicyResult, Box
                 .flatten()
                 .collect()
         }
-        Command::InstallHooks => install_hooks::<LiveGit>().map(|_| PolicyResult::Ok),
+        Command::InstallHooks => install_hooks(git).map(|_| PolicyResult::Ok),
     }
 }
 

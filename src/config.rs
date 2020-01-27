@@ -9,7 +9,7 @@ pub struct Config {
     pub verify_git_commits: Option<VerifyGitCommitsConfig>,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct GitConfig {
     #[serde(default = "default_mainlines")]
     pub mainlines: Vec<String>,
