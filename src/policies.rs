@@ -173,7 +173,7 @@ fn commits_to_verify<G: Git>(
     new_commit_id: Oid,
     override_tag_pattern: &Option<String>,
 ) -> Result<Vec<Commit>, Box<dyn Error>> {
-    git.find_commits(&[old_commit_id], &[new_commit_id], override_tag_pattern)
+    git.find_new_commits(&[old_commit_id], &[new_commit_id], override_tag_pattern)
 }
 
 fn commits_to_verify_excluding_manually_verified<G: Git>(
@@ -185,7 +185,7 @@ fn commits_to_verify_excluding_manually_verified<G: Git>(
 ) -> Result<Vec<Commit>, Box<dyn Error>> {
     let mut to_exclude = manually_verified;
     to_exclude.push(old_commit_id);
-    git.find_commits(&to_exclude, &[new_commit_id], override_tag_pattern)
+    git.find_new_commits(&to_exclude, &[new_commit_id], override_tag_pattern)
 }
 
 fn find_and_verify_override_tags<G: Git, P: Gpg>(

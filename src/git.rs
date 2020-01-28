@@ -46,7 +46,7 @@ pub trait Git: Sized {
         commit_id: Oid,
         override_tag_pattern: &Option<String>,
     ) -> Result<Commit, Box<dyn Error>>;
-    fn find_commits(
+    fn find_new_commits(
         &self,
         exclusions: &[Oid],
         inclusions: &[Oid],
@@ -173,7 +173,7 @@ impl Git for LiveGit {
         })
     }
 
-    fn find_commits(
+    fn find_new_commits(
         &self,
         exclusions: &[Oid],
         inclusions: &[Oid],
@@ -186,8 +186,13 @@ impl Git for LiveGit {
         for &exclusion in exclusions.iter().filter(|id| !id.is_zero()) {
             revwalk.hide(exclusion)?;
         }
-        // TODO: This needs to be all mainlines
-        revwalk.hide_head()?;
+        for mainline in &self.config.mainlines {
+            if mainline == "HEAD" {
+                revwalk.hide_head()?;
+            } else {
+                revwalk.hide_glob(&format!("refs/heads/{}", mainline))?;
+            }
+        }
 
         let commits = revwalk
             .into_iter()
@@ -504,6 +509,20 @@ mod test {
         )
         .unwrap();
         assert_eq!(git.is_mainline("refs/heads/master").unwrap(), false);
+        assert_eq!(git.is_mainline("refs/heads/tagged-branch").unwrap(), true);
+    }
+
+    #[test]
+    fn is_mainline_with_multiple_glob_config_identifies_all_matches() {
+        let project_root = env!("CARGO_MANIFEST_DIR");
+        let git = LiveGit::new(
+            format!("{}/tests/test-repo.git", project_root),
+            GitConfig {
+                mainlines: vec!["HEAD".into(), "tagged-*".into()],
+            },
+        )
+        .unwrap();
+        assert_eq!(git.is_mainline("refs/heads/master").unwrap(), true);
         assert_eq!(git.is_mainline("refs/heads/tagged-branch").unwrap(), true);
     }
 }
