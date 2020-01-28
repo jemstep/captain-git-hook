@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::fs::File;
 use std::io::prelude::*;
+use std::path::Path;
 use std::process::*;
 use std::str;
 
@@ -54,15 +55,15 @@ pub trait Git: Sized {
 
     fn is_merge_commit(&self, commit_id: Oid) -> bool;
     fn is_trivial_merge_commit(&self, commit: &Commit) -> Result<bool, Box<dyn Error>>;
-    fn is_head(&self, ref_name: &str) -> Result<bool, Box<dyn Error>>;
-    fn path(&self) -> &std::path::Path;
+    fn is_mainline(&self, ref_name: &str) -> Result<bool, Box<dyn Error>>;
+    fn path(&self) -> &Path;
     fn verify_commit_signature(
-        path: &std::path::Path,
+        path: &Path,
         commit: &Commit,
         keyring: &Keyring,
     ) -> Result<bool, Box<dyn Error>>;
     fn verify_tag_signature(
-        path: &std::path::Path,
+        path: &Path,
         tag: &Tag,
         keyring: &Keyring,
     ) -> Result<bool, Box<dyn Error>>;
@@ -76,11 +77,11 @@ pub trait Git: Sized {
 pub struct LiveGit {
     repo: Repository,
     tag_cache: RefCell<HashMap<Option<String>, HashMap<Oid, Vec<Tag>>>>,
-    _config: GitConfig,
+    config: GitConfig,
 }
 
 impl Git for LiveGit {
-    fn path(&self) -> &std::path::Path {
+    fn path(&self) -> &Path {
         self.repo.path()
     }
 
@@ -200,7 +201,7 @@ impl Git for LiveGit {
     }
 
     fn verify_tag_signature(
-        path: &std::path::Path,
+        path: &Path,
         tag: &Tag,
         keyring: &Keyring,
     ) -> Result<bool, Box<dyn Error>> {
@@ -254,7 +255,7 @@ impl Git for LiveGit {
     }
 
     fn verify_commit_signature(
-        path: &std::path::Path,
+        path: &Path,
         commit: &Commit,
         keyring: &Keyring,
     ) -> Result<bool, Box<dyn Error>> {
@@ -340,10 +341,34 @@ impl Git for LiveGit {
         }
     }
 
-    fn is_head(&self, ref_name: &str) -> Result<bool, Box<dyn Error>> {
-        // TODO: Check all mainlines
-        let head = self.repo.head()?;
-        Ok(Some(ref_name) == head.name())
+    fn is_mainline(&self, ref_name: &str) -> Result<bool, Box<dyn Error>> {
+        fn is_head(git: &LiveGit, ref_name: &str) -> Result<bool, Box<dyn Error>> {
+            let head = git.repo.head()?;
+            Ok(Some(ref_name) == head.name())
+        }
+        fn matches_glob(git: &LiveGit, ref_name: &str, glob: &str) -> Result<bool, Box<dyn Error>> {
+            let mut references = git.repo.references_glob(glob)?;
+            references
+                .names()
+                .map(|name| name.map(|n| n == ref_name))
+                .fold(Ok(false), |acc, next| {
+                    acc.and_then(|a| next.map(|b| a || b).map_err(|e| e.into()))
+                })
+        }
+
+        self.config
+            .mainlines
+            .iter()
+            .map(|mainline_glob| {
+                if mainline_glob == "HEAD" {
+                    is_head(self, ref_name)
+                } else {
+                    matches_glob(self, ref_name, mainline_glob)
+                }
+            })
+            .fold(Ok(false), |acc, next| {
+                acc.and_then(|a| next.map(|b| a || b))
+            })
     }
 
     fn is_tag(&self, id: Oid) -> bool {
@@ -355,21 +380,21 @@ impl Git for LiveGit {
 }
 
 impl LiveGit {
-    pub fn default() -> Result<Self, Box<dyn Error>> {
-        let repo = Repository::discover("./")?;
+    pub fn default(path: impl AsRef<Path>) -> Result<Self, Box<dyn Error>> {
+        let repo = Repository::discover(path)?;
         Ok(LiveGit {
             repo,
             tag_cache: RefCell::new(HashMap::new()),
-            _config: GitConfig::default(),
+            config: GitConfig::default(),
         })
     }
 
-    pub fn new(config: GitConfig) -> Result<Self, Box<dyn Error>> {
-        let repo = Repository::discover("./")?;
+    pub fn new(path: impl AsRef<Path>, config: GitConfig) -> Result<Self, Box<dyn Error>> {
+        let repo = Repository::discover(path)?;
         Ok(LiveGit {
             repo,
             tag_cache: RefCell::new(HashMap::new()),
-            _config: config,
+            config,
         })
     }
 
@@ -454,5 +479,17 @@ impl Drop for TempRepo {
         if let Err(e) = drop_result {
             warn!("Failed to clean up temp repo: {}", e);
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    #[test]
+    fn is_mainline_with_default_config_only_identifies_head_branch() {
+        let project_root = env!("CARGO_MANIFEST_DIR");
+        let git = LiveGit::default(format!("{}/tests/test-repo.git", project_root)).unwrap();
+        assert_eq!(git.is_mainline("refs/heads/master").unwrap(), true);
+        assert_eq!(git.is_mainline("refs/heads/tagged-branch").unwrap(), false);
     }
 }

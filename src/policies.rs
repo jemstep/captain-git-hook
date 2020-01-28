@@ -309,10 +309,10 @@ fn verify_different_authors<G: Git>(
 ) -> Result<PolicyResult, Box<dyn Error>> {
     let new_branch = old_commit_id.is_zero();
     let is_merge = git.is_merge_commit(new_commit_id);
-    let is_head = git.is_head(ref_name)?;
+    let is_mainline = git.is_mainline(ref_name)?;
 
-    if !is_head {
-        info!("Multiple author verification passed for {}: Not updating the head of the repo, does not require multiple authors", new_commit_id);
+    if !is_mainline {
+        info!("Multiple author verification passed for {}: Not updating a mainline branch, does not require multiple authors", new_commit_id);
         Ok(PolicyResult::Ok)
     } else if !is_merge {
         info!("Multiple author verification passed for {}: Not a merge commit, does not require multiple authors", new_commit_id);

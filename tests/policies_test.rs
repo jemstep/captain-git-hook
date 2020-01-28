@@ -68,7 +68,7 @@ fn verify_git_commits_happy_path_from_empty_through_pre_receive() {
         verify_git_commits: Some(verify_commits_config()),
     };
     let result = capn::pre_receive::<LiveGit, MockGpg>(
-        &LiveGit::default().unwrap(),
+        &LiveGit::default("./").unwrap(),
         MockGpg,
         &config,
         "0000000000000000000000000000000000000000",
@@ -83,7 +83,7 @@ fn verify_git_commits_happy_path_from_empty_through_pre_receive() {
 fn verify_git_commits_happy_path_from_empty() {
     before_all();
     let result = policies::verify_git_commits::<LiveGit, MockGpg>(
-        &LiveGit::default().unwrap(),
+        &LiveGit::default("./").unwrap(),
         MockGpg,
         &verify_commits_config(),
         "0000000000000000000000000000000000000000",
@@ -98,7 +98,7 @@ fn verify_git_commits_happy_path_from_empty() {
 fn verify_git_commits_happy_path_from_existing() {
     before_all();
     let result = policies::verify_git_commits::<LiveGit, MockGpg>(
-        &LiveGit::default().unwrap(),
+        &LiveGit::default("./").unwrap(),
         MockGpg,
         &verify_commits_config(),
         "7f9763e189ade34345e683ab7e0c22d164280452",
@@ -113,7 +113,7 @@ fn verify_git_commits_happy_path_from_existing() {
 fn verify_git_commits_happy_path_unsigned_trivial_no_fast_forward_merge() {
     before_all();
     let result = policies::verify_git_commits::<LiveGit, MockGpg>(
-        &LiveGit::default().unwrap(),
+        &LiveGit::default("./").unwrap(),
         MockGpg,
         &verify_commits_config(),
         "eb5e0185546b0bb1a13feec6b9ee8b39985fea42",
@@ -128,7 +128,7 @@ fn verify_git_commits_happy_path_unsigned_trivial_no_fast_forward_merge() {
 fn verify_git_commits_happy_path_unsigned_trivial_merge() {
     before_all();
     let result = policies::verify_git_commits::<LiveGit, MockGpg>(
-        &LiveGit::default().unwrap(),
+        &LiveGit::default("./").unwrap(),
         MockGpg,
         &verify_commits_config(),
         "eb5e0185546b0bb1a13feec6b9ee8b39985fea42",
@@ -143,7 +143,7 @@ fn verify_git_commits_happy_path_unsigned_trivial_merge() {
 fn verify_git_commits_single_unsigned_commit() {
     before_all();
     let result = policies::verify_git_commits::<LiveGit, MockGpg>(
-        &LiveGit::default().unwrap(),
+        &LiveGit::default("./").unwrap(),
         MockGpg,
         &verify_commits_config(),
         "eb5e0185546b0bb1a13feec6b9ee8b39985fea42",
@@ -158,7 +158,7 @@ fn verify_git_commits_single_unsigned_commit() {
 fn verify_git_commits_single_unsigned_commit_new_branch() {
     before_all();
     let result = policies::verify_git_commits::<LiveGit, MockGpg>(
-        &LiveGit::default().unwrap(),
+        &LiveGit::default("./").unwrap(),
         MockGpg,
         &verify_commits_config(),
         "0000000000000000000000000000000000000000",
@@ -173,7 +173,7 @@ fn verify_git_commits_single_unsigned_commit_new_branch() {
 fn verify_git_commits_unsigned_commit_being_merged_in() {
     before_all();
     let result = policies::verify_git_commits::<LiveGit, MockGpg>(
-        &LiveGit::default().unwrap(),
+        &LiveGit::default("./").unwrap(),
         MockGpg,
         &verify_commits_config(),
         "eb5e0185546b0bb1a13feec6b9ee8b39985fea42",
@@ -188,7 +188,7 @@ fn verify_git_commits_unsigned_commit_being_merged_in() {
 fn verify_git_commits_unsigned_commit_behind_a_merge_commit() {
     before_all();
     let result = policies::verify_git_commits::<LiveGit, MockGpg>(
-        &LiveGit::default().unwrap(),
+        &LiveGit::default("./").unwrap(),
         MockGpg,
         &verify_commits_config(),
         "eb5e0185546b0bb1a13feec6b9ee8b39985fea42",
@@ -203,7 +203,7 @@ fn verify_git_commits_unsigned_commit_behind_a_merge_commit() {
 fn verify_git_commits_invalid_author() {
     before_all();
     let result = policies::verify_git_commits::<LiveGit, MockGpg>(
-        &LiveGit::default().unwrap(),
+        &LiveGit::default("./").unwrap(),
         MockGpg,
         &verify_commits_config(),
         "eb5e0185546b0bb1a13feec6b9ee8b39985fea42",
@@ -218,7 +218,7 @@ fn verify_git_commits_invalid_author() {
 fn verify_git_commits_code_injected_into_unsigned_merge() {
     before_all();
     let result = policies::verify_git_commits::<LiveGit, MockGpg>(
-        &LiveGit::default().unwrap(),
+        &LiveGit::default("./").unwrap(),
         MockGpg,
         &verify_commits_config(),
         "eb5e0185546b0bb1a13feec6b9ee8b39985fea42",
@@ -234,7 +234,7 @@ fn verify_git_commits_happy_path_pushing_previously_checked_merge_commit() {
     // This is an edge case for checking that merges have multiple authors
     before_all();
     let result = policies::verify_git_commits::<LiveGit, MockGpg>(
-        &LiveGit::default().unwrap(),
+        &LiveGit::default("./").unwrap(),
         MockGpg,
         &verify_commits_config(),
         "3eb315d10e2ad89555d7bfc78a1db1ce07bce434",
@@ -249,7 +249,7 @@ fn verify_git_commits_happy_path_pushing_previously_checked_merge_commit() {
 fn verify_git_commits_author_merged_own_code_not_on_head() {
     before_all();
     let result = policies::verify_git_commits::<LiveGit, MockGpg>(
-        &LiveGit::default().unwrap(),
+        &LiveGit::default("./").unwrap(),
         MockGpg,
         &verify_commits_config(),
         "eb5e0185546b0bb1a13feec6b9ee8b39985fea42",
@@ -264,7 +264,7 @@ fn verify_git_commits_author_merged_own_code_not_on_head() {
 fn verify_git_commits_author_merged_own_code_on_head() {
     before_all();
     let result = policies::verify_git_commits::<LiveGit, MockGpg>(
-        &LiveGit::default().unwrap(),
+        &LiveGit::default("./").unwrap(),
         MockGpg,
         &verify_commits_config(),
         "eb5e0185546b0bb1a13feec6b9ee8b39985fea42",
@@ -279,7 +279,7 @@ fn verify_git_commits_author_merged_own_code_on_head() {
 fn verify_git_commits_author_merged_own_code_on_head_with_tag() {
     before_all();
     let result = policies::verify_git_commits::<LiveGit, MockGpg>(
-        &LiveGit::default().unwrap(),
+        &LiveGit::default("./").unwrap(),
         MockGpg,
         &verify_commits_config(),
         "eb5e0185546b0bb1a13feec6b9ee8b39985fea42",
@@ -294,7 +294,7 @@ fn verify_git_commits_author_merged_own_code_on_head_with_tag() {
 fn verify_tagged_git_commits_override_rules() {
     before_all();
     let result = policies::verify_git_commits::<LiveGit, MockGpg>(
-        &LiveGit::default().unwrap(),
+        &LiveGit::default("./").unwrap(),
         MockGpg,
         &verify_commits_config(),
         "7f9763e189ade34345e683ab7e0c22d164280452",
@@ -309,7 +309,7 @@ fn verify_tagged_git_commits_override_rules() {
 fn verify_tagged_git_commits_not_overridden_if_not_enough_tags() {
     before_all();
     let result = policies::verify_git_commits::<LiveGit, MockGpg>(
-        &LiveGit::default().unwrap(),
+        &LiveGit::default("./").unwrap(),
         MockGpg,
         &VerifyGitCommitsConfig {
             override_tags_required: 2,

@@ -95,12 +95,12 @@ fn load_config() -> Result<Config, Box<dyn Error>> {
     // This is a necessary bootstrapping step, because we need a Git
     // object to load the config, which is used to initialize the Git
     // object used for the rest of the run.
-    let default_git = LiveGit::default()?;
+    let default_git = LiveGit::default("./")?;
     default_git.read_config()
 }
 
 fn execute_command(command: Command, config: Config) -> Result<PolicyResult, Box<dyn Error>> {
-    let git = LiveGit::new(config.git.clone())?;
+    let git = LiveGit::new("./", config.git.clone())?;
     match command {
         Command::PrepareCommitMsg(args) => {
             info!("Calling prepare-commit-msg");
