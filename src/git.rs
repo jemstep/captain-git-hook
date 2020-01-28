@@ -347,7 +347,7 @@ impl Git for LiveGit {
             Ok(Some(ref_name) == head.name())
         }
         fn matches_glob(git: &LiveGit, ref_name: &str, glob: &str) -> Result<bool, Box<dyn Error>> {
-            let mut references = git.repo.references_glob(glob)?;
+            let mut references = git.repo.references_glob(&format!("refs/heads/{}", glob))?;
             references
                 .names()
                 .map(|name| name.map(|n| n == ref_name))
@@ -491,5 +491,19 @@ mod test {
         let git = LiveGit::default(format!("{}/tests/test-repo.git", project_root)).unwrap();
         assert_eq!(git.is_mainline("refs/heads/master").unwrap(), true);
         assert_eq!(git.is_mainline("refs/heads/tagged-branch").unwrap(), false);
+    }
+
+    #[test]
+    fn is_mainline_with_glob_config_does_not_identify_head_branch() {
+        let project_root = env!("CARGO_MANIFEST_DIR");
+        let git = LiveGit::new(
+            format!("{}/tests/test-repo.git", project_root),
+            GitConfig {
+                mainlines: vec!["tagged-*".into()],
+            },
+        )
+        .unwrap();
+        assert_eq!(git.is_mainline("refs/heads/master").unwrap(), false);
+        assert_eq!(git.is_mainline("refs/heads/tagged-branch").unwrap(), true);
     }
 }
