@@ -189,8 +189,10 @@ impl Git for LiveGit {
         for mainline in &self.config.mainlines {
             if mainline == "HEAD" {
                 revwalk.hide_head()?;
-            } else {
+            } else if mainline.contains(|c| c == '?' || c == '*' || c == '[') {
                 revwalk.hide_glob(&format!("refs/heads/{}", mainline))?;
+            } else {
+                revwalk.hide_ref(&format!("refs/heads/{}", mainline))?;
             }
         }
 
@@ -490,6 +492,8 @@ impl Drop for TempRepo {
 #[cfg(test)]
 mod test {
     use super::*;
+    use git2::Oid;
+
     #[test]
     fn is_mainline_with_default_config_only_identifies_head_branch() {
         let project_root = env!("CARGO_MANIFEST_DIR");
@@ -524,5 +528,59 @@ mod test {
         .unwrap();
         assert_eq!(git.is_mainline("refs/heads/master").unwrap(), true);
         assert_eq!(git.is_mainline("refs/heads/tagged-branch").unwrap(), true);
+    }
+
+    #[test]
+    fn new_commits_off_master_with_default_config() {
+        let project_root = env!("CARGO_MANIFEST_DIR");
+        let git = LiveGit::default(format!("{}/tests/test-repo.git", project_root)).unwrap();
+        let commits = git
+            .find_new_commits(
+                &[Oid::from_str("eb5e0185546b0bb1a13feec6b9ee8b39985fea42").unwrap()],
+                &[Oid::from_str("6004dfdb071c71e5e76ad55b924b576487e1c485").unwrap()],
+                &None,
+            )
+            .unwrap();
+        assert_eq!(commits.len(), 2)
+    }
+
+    #[test]
+    fn new_commits_off_master_with_configured_mainline_glob() {
+        let project_root = env!("CARGO_MANIFEST_DIR");
+        let git = LiveGit::new(
+            format!("{}/tests/test-repo.git", project_root),
+            GitConfig {
+                mainlines: vec!["HEAD".into(), "valid-*".into()],
+            },
+        )
+        .unwrap();
+        let commits = git
+            .find_new_commits(
+                &[Oid::from_str("eb5e0185546b0bb1a13feec6b9ee8b39985fea42").unwrap()],
+                &[Oid::from_str("6004dfdb071c71e5e76ad55b924b576487e1c485").unwrap()],
+                &None,
+            )
+            .unwrap();
+        assert_eq!(commits.len(), 1)
+    }
+
+    #[test]
+    fn new_commits_off_master_with_configured_mainline_literal_branch_name() {
+        let project_root = env!("CARGO_MANIFEST_DIR");
+        let git = LiveGit::new(
+            format!("{}/tests/test-repo.git", project_root),
+            GitConfig {
+                mainlines: vec!["HEAD".into(), "valid-branch".into()],
+            },
+        )
+        .unwrap();
+        let commits = git
+            .find_new_commits(
+                &[Oid::from_str("eb5e0185546b0bb1a13feec6b9ee8b39985fea42").unwrap()],
+                &[Oid::from_str("6004dfdb071c71e5e76ad55b924b576487e1c485").unwrap()],
+                &None,
+            )
+            .unwrap();
+        assert_eq!(commits.len(), 1)
     }
 }
