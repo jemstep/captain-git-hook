@@ -86,11 +86,17 @@ This is an example ~.capn~ file: [[./.capn]]
 
 *** Policies
 **** Git configuration
+There are some properties that are common across
+policies. Configuration of how certain Git conventions are followed
+are grouped into the ~[git]~ section, and may affect multiple
+policies.
 
-# TODO: Explain [git] section
-
-#+BEING_SRC toml
+#+BEGIN_SRC toml
   [git]
+
+  # The set of branches and patterns that are considered the 'mainline' by other policies.
+  # Supports globs and the special symbolic reference "HEAD".
+  # Default is [ "HEAD" ]
   mainlines = [ "HEAD", "develop", "RC-*" ]
 #+END_SRC
 
@@ -123,7 +129,7 @@ This is the config section for this policy:
   recv_keys_par = true # run key requests to keyserver in parallel
   skip_recv_keys = false # if true, do not fetch keys from the keyserver
 
-  verify_different_authors = true # if true, merge commits to the head branch of the repo should have multiple authors in the branch
+  verify_different_authors = true # if true, merge commits to the mainline branch of the repo should have multiple authors in the branch
 
   override_tag_pattern = "capn-override-*" # glob used to limit tags that are considered override tags (see Override Tags docs)
   override_tags_required = 2 # the number of tags required to override signed commit rules
