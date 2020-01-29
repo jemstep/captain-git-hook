@@ -492,13 +492,19 @@ impl Drop for TempRepo {
 #[cfg(test)]
 mod test {
     use super::*;
-    use git2::Oid;
+    use git2::{Oid, Reference};
     use quickcheck_macros::quickcheck;
+
+    fn valid_mainlines(mainlines: &[String]) -> bool {
+        mainlines
+            .iter()
+            .all(|mainline| !mainline.contains('\u{0}') && Reference::is_valid_name(&mainline))
+    }
 
     #[test]
     fn is_mainline_with_default_config_only_identifies_head_branch() {
         let project_root = env!("CARGO_MANIFEST_DIR");
-        let git = LiveGit::default(format!("{}/tests/test-repo.git", project_root)).unwrap();
+        let git = LiveGit::default(format!("{}/tests/test-repo.git/", project_root)).unwrap();
         assert_eq!(git.is_mainline("refs/heads/master").unwrap(), true);
         assert_eq!(git.is_mainline("refs/heads/tagged-branch").unwrap(), false);
     }
@@ -532,14 +538,16 @@ mod test {
     }
 
     #[quickcheck]
-    fn is_mainline_fuzz(branch: String, mainlines: Vec<String>) -> bool {
-        let project_root = env!("CARGO_MANIFEST_DIR");
-        let git = LiveGit::new(
-            format!("{}/tests/test-repo.git", project_root),
-            GitConfig { mainlines },
-        )
-        .unwrap();
-        git.is_mainline(&branch).is_ok()
+    fn is_mainline_fuzz(branch: String, mainlines: Vec<String>) {
+        if valid_mainlines(&mainlines) {
+            let project_root = env!("CARGO_MANIFEST_DIR");
+            let git = LiveGit::new(
+                format!("{}/tests/test-repo.git", project_root),
+                GitConfig { mainlines },
+            )
+            .unwrap();
+            git.is_mainline(&branch).unwrap();
+        }
     }
 
     #[test]
@@ -610,19 +618,41 @@ mod test {
         assert_eq!(commits.len(), 1)
     }
 
-    #[quickcheck]
-    fn new_commits_fuzz(mainlines: Vec<String>) -> bool {
+    #[test]
+    fn new_commits_off_master_with_configured_mainline_literal_branch_doesnt_exist() {
         let project_root = env!("CARGO_MANIFEST_DIR");
         let git = LiveGit::new(
             format!("{}/tests/test-repo.git", project_root),
-            GitConfig { mainlines },
+            GitConfig {
+                mainlines: vec!["HEAD".into(), "this-branch-does-not-exist-asdfg".into()],
+            },
         )
         .unwrap();
-        git.find_new_commits(
-            &[Oid::from_str("eb5e0185546b0bb1a13feec6b9ee8b39985fea42").unwrap()],
-            &[Oid::from_str("6004dfdb071c71e5e76ad55b924b576487e1c485").unwrap()],
-            &None,
-        )
-        .is_ok()
+        let commits = git
+            .find_new_commits(
+                &[Oid::from_str("eb5e0185546b0bb1a13feec6b9ee8b39985fea42").unwrap()],
+                &[Oid::from_str("6004dfdb071c71e5e76ad55b924b576487e1c485").unwrap()],
+                &None,
+            )
+            .unwrap();
+        assert_eq!(commits.len(), 2)
+    }
+
+    #[quickcheck]
+    fn new_commits_fuzz(mainlines: Vec<String>) {
+        if valid_mainlines(&mainlines) {
+            let project_root = env!("CARGO_MANIFEST_DIR");
+            let git = LiveGit::new(
+                format!("{}/tests/test-repo.git", project_root),
+                GitConfig { mainlines },
+            )
+            .unwrap();
+            git.find_new_commits(
+                &[Oid::from_str("eb5e0185546b0bb1a13feec6b9ee8b39985fea42").unwrap()],
+                &[Oid::from_str("6004dfdb071c71e5e76ad55b924b576487e1c485").unwrap()],
+                &None,
+            )
+            .unwrap();
+        }
     }
 }
