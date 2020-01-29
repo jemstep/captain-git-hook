@@ -11,14 +11,14 @@ pub struct Config {
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct GitConfig {
-    #[serde(default = "default_mainlines")]
+    #[serde(default = "GitConfig::default_mainlines")]
     pub mainlines: Vec<String>,
 }
 
 impl Default for GitConfig {
     fn default() -> GitConfig {
         GitConfig {
-            mainlines: default_mainlines(),
+            mainlines: GitConfig::default_mainlines(),
         }
     }
 }
@@ -60,12 +60,14 @@ fn default_two() -> u8 {
     2
 }
 
-fn default_mainlines() -> Vec<String> {
-    vec!["HEAD".into()]
-}
-
 impl Config {
     pub fn from_toml_string(input: &str) -> Result<Config, toml::de::Error> {
         toml::from_str(input)
+    }
+}
+
+impl GitConfig {
+    fn default_mainlines() -> Vec<String> {
+        vec!["HEAD".into()]
     }
 }
