@@ -510,7 +510,7 @@ mod test {
     #[test]
     fn is_mainline_with_default_config_only_identifies_head_branch() {
         let project_root = env!("CARGO_MANIFEST_DIR");
-        let git = LiveGit::default(format!("{}/tests/test-repo.git/", project_root)).unwrap();
+        let git = LiveGit::default(format!("{}/tests/test-repo.git", project_root)).unwrap();
         assert_eq!(git.is_mainline("refs/heads/master").unwrap(), true);
         assert_eq!(git.is_mainline("refs/heads/tagged-branch").unwrap(), false);
     }
@@ -519,7 +519,7 @@ mod test {
     fn is_mainline_with_glob_config_does_not_identify_head_branch() {
         let project_root = env!("CARGO_MANIFEST_DIR");
         let git = LiveGit::new(
-            format!("{}/tests/test-repo.git/", project_root),
+            format!("{}/tests/test-repo.git", project_root),
             GitConfig {
                 mainlines: vec!["tagged-*".into()],
             },
@@ -533,7 +533,7 @@ mod test {
     fn is_mainline_with_literal_config_does_not_identify_head_branch() {
         let project_root = env!("CARGO_MANIFEST_DIR");
         let git = LiveGit::new(
-            format!("{}/tests/test-repo.git/", project_root),
+            format!("{}/tests/test-repo.git", project_root),
             GitConfig {
                 mainlines: vec!["tagged-branch".into()],
             },
@@ -548,7 +548,7 @@ mod test {
         if valid_mainlines(&mainlines) {
             let project_root = env!("CARGO_MANIFEST_DIR");
             let git = LiveGit::new(
-                format!("{}/tests/test-repo.git/", project_root),
+                format!("{}/tests/test-repo.git", project_root),
                 GitConfig { mainlines },
             )
             .unwrap();
@@ -560,7 +560,7 @@ mod test {
     fn is_mainline_with_multiple_glob_config_identifies_all_matches() {
         let project_root = env!("CARGO_MANIFEST_DIR");
         let git = LiveGit::new(
-            format!("{}/tests/test-repo.git/", project_root),
+            format!("{}/tests/test-repo.git", project_root),
             GitConfig {
                 mainlines: vec!["HEAD".into(), "tagged-*".into()],
             },
@@ -573,7 +573,7 @@ mod test {
     #[test]
     fn new_commits_off_master_with_default_config() {
         let project_root = env!("CARGO_MANIFEST_DIR");
-        let git = LiveGit::default(format!("{}/tests/test-repo.git/", project_root)).unwrap();
+        let git = LiveGit::default(format!("{}/tests/test-repo.git", project_root)).unwrap();
         let commits = git
             .find_new_commits(
                 &[Oid::from_str("eb5e0185546b0bb1a13feec6b9ee8b39985fea42").unwrap()],
@@ -588,7 +588,7 @@ mod test {
     fn new_commits_off_master_with_configured_mainline_glob() {
         let project_root = env!("CARGO_MANIFEST_DIR");
         let git = LiveGit::new(
-            format!("{}/tests/test-repo.git/", project_root),
+            format!("{}/tests/test-repo.git", project_root),
             GitConfig {
                 mainlines: vec!["HEAD".into(), "valid-*".into()],
             },
@@ -608,7 +608,7 @@ mod test {
     fn new_commits_off_master_with_configured_mainline_literal_branch_name() {
         let project_root = env!("CARGO_MANIFEST_DIR");
         let git = LiveGit::new(
-            format!("{}/tests/test-repo.git/", project_root),
+            format!("{}/tests/test-repo.git", project_root),
             GitConfig {
                 mainlines: vec!["HEAD".into(), "valid-branch".into()],
             },
@@ -628,7 +628,7 @@ mod test {
     fn new_commits_off_master_with_configured_mainline_literal_branch_doesnt_exist() {
         let project_root = env!("CARGO_MANIFEST_DIR");
         let git = LiveGit::new(
-            format!("{}/tests/test-repo.git/", project_root),
+            format!("{}/tests/test-repo.git", project_root),
             GitConfig {
                 mainlines: vec!["HEAD".into(), "this-branch-does-not-exist-asdfg".into()],
             },
@@ -649,7 +649,7 @@ mod test {
         if valid_mainlines(&mainlines) {
             let project_root = env!("CARGO_MANIFEST_DIR");
             let git = LiveGit::new(
-                format!("{}/tests/test-repo.git/", project_root),
+                format!("{}/tests/test-repo.git", project_root),
                 GitConfig { mainlines },
             )
             .unwrap();
