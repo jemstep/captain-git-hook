@@ -102,7 +102,7 @@ pub fn pre_receive<G: Git, P: Gpg>(
     .collect()
 }
 
-pub fn install_hooks<G: Git>(git: G) -> Result<(), Box<dyn Error>> {
+pub fn install_hooks<G: Git>(git: &G) -> Result<(), Box<dyn Error>> {
     git.write_git_file(
         "hooks/prepare-commit-msg",
         0o750,

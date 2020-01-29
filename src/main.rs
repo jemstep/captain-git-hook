@@ -144,7 +144,7 @@ fn execute_command(command: Command, config: Config) -> Result<PolicyResult, Box
                 .flatten()
                 .collect()
         }
-        Command::InstallHooks => install_hooks(git).map(|_| PolicyResult::Ok),
+        Command::InstallHooks => install_hooks(&git).map(|_| PolicyResult::Ok),
     }
 }
 
