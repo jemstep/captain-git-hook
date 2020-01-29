@@ -85,6 +85,15 @@ project's repo. This configuration file is in TOML format.
 This is an example ~.capn~ file: [[./.capn]]
 
 *** Policies
+**** Git configuration
+
+# TODO: Explain [git] section
+
+#+BEING_SRC toml
+  [git]
+  mainlines = [ "HEAD", "develop", "RC-*" ]
+#+END_SRC
+
 **** Verify Git Commits
 This policy ensures that all commits come from a trusted source, using
 GPG keys. For this policy to work, Captain Git Hook must be installed
