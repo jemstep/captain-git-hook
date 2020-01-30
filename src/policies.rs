@@ -71,17 +71,18 @@ impl iter::FromIterator<PolicyResult> for PolicyResult {
 }
 
 pub fn prepend_branch_name<F: Fs, G: Git>(
+    git: &G,
     commit_file: PathBuf,
 ) -> Result<PolicyResult, Box<dyn Error>> {
     info!("Executing policy: prepend_branch_name");
 
-    let git = G::new()?;
     let branch = git.current_branch()?;
     F::prepend_string_to_file(branch, commit_file)?;
     Ok(PolicyResult::Ok)
 }
 
 pub fn verify_git_commits<G: Git, P: Gpg>(
+    git: &G,
     gpg: P,
     config: &VerifyGitCommitsConfig,
     old_value: &str,
@@ -89,7 +90,6 @@ pub fn verify_git_commits<G: Git, P: Gpg>(
     ref_name: &str,
 ) -> Result<PolicyResult, Box<dyn Error>> {
     info!("Executing policy: verify_git_commits");
-    let git = G::new()?;
     let start = Instant::now();
     let old_commit_id = Oid::from_str(old_value)?;
     let new_commit_id = Oid::from_str(new_value)?;
@@ -102,7 +102,7 @@ pub fn verify_git_commits<G: Git, P: Gpg>(
         debug!("Tag detected, no commits to verify.")
     } else {
         let all_commits = commits_to_verify(
-            &git,
+            git,
             old_commit_id,
             new_commit_id,
             &config.override_tag_pattern,
@@ -117,14 +117,14 @@ pub fn verify_git_commits<G: Git, P: Gpg>(
             Keyring::from_team_fingerprints_file(git.read_file(&config.team_fingerprints_file)?);
 
         let manually_verified_commmits = find_and_verify_override_tags(
-            &git,
+            git,
             &gpg,
             &all_commits,
             config.override_tags_required,
             &mut keyring,
         )?;
         let not_manually_verified_commits = commits_to_verify_excluding_manually_verified(
-            &git,
+            git,
             old_commit_id,
             new_commit_id,
             manually_verified_commmits,
@@ -141,7 +141,7 @@ pub fn verify_git_commits<G: Git, P: Gpg>(
 
         if config.verify_commit_signatures {
             policy_result = policy_result.and(verify_commit_signatures::<G, P>(
-                &git,
+                git,
                 &gpg,
                 &not_manually_verified_commits,
                 &mut keyring,
@@ -151,7 +151,7 @@ pub fn verify_git_commits<G: Git, P: Gpg>(
         if config.verify_different_authors {
             policy_result = policy_result.and(verify_different_authors::<G>(
                 &all_commits,
-                &git,
+                git,
                 old_commit_id,
                 new_commit_id,
                 ref_name,
@@ -173,7 +173,7 @@ fn commits_to_verify<G: Git>(
     new_commit_id: Oid,
     override_tag_pattern: &Option<String>,
 ) -> Result<Vec<Commit>, Box<dyn Error>> {
-    git.find_commits(&[old_commit_id], &[new_commit_id], override_tag_pattern)
+    git.find_new_commits(&[old_commit_id], &[new_commit_id], override_tag_pattern)
 }
 
 fn commits_to_verify_excluding_manually_verified<G: Git>(
@@ -185,7 +185,7 @@ fn commits_to_verify_excluding_manually_verified<G: Git>(
 ) -> Result<Vec<Commit>, Box<dyn Error>> {
     let mut to_exclude = manually_verified;
     to_exclude.push(old_commit_id);
-    git.find_commits(&to_exclude, &[new_commit_id], override_tag_pattern)
+    git.find_new_commits(&to_exclude, &[new_commit_id], override_tag_pattern)
 }
 
 fn find_and_verify_override_tags<G: Git, P: Gpg>(
@@ -309,10 +309,10 @@ fn verify_different_authors<G: Git>(
 ) -> Result<PolicyResult, Box<dyn Error>> {
     let new_branch = old_commit_id.is_zero();
     let is_merge = git.is_merge_commit(new_commit_id);
-    let is_head = git.is_head(ref_name)?;
+    let is_mainline = git.is_mainline(ref_name)?;
 
-    if !is_head {
-        info!("Multiple author verification passed for {}: Not updating the head of the repo, does not require multiple authors", new_commit_id);
+    if !is_mainline {
+        info!("Multiple author verification passed for {}: Not updating a mainline branch, does not require multiple authors", new_commit_id);
         Ok(PolicyResult::Ok)
     } else if !is_merge {
         info!("Multiple author verification passed for {}: Not a merge commit, does not require multiple authors", new_commit_id);

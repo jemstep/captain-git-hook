@@ -1,1 +1,4 @@
+[git]
+mainlines = [ "master" ]
+
 [prepend_branch_name]

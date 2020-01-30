@@ -3,8 +3,24 @@ use toml;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct Config {
+    #[serde(default)]
+    pub git: GitConfig,
     pub prepend_branch_name: Option<Unit>,
     pub verify_git_commits: Option<VerifyGitCommitsConfig>,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+pub struct GitConfig {
+    #[serde(default = "GitConfig::default_mainlines")]
+    pub mainlines: Vec<String>,
+}
+
+impl Default for GitConfig {
+    fn default() -> GitConfig {
+        GitConfig {
+            mainlines: GitConfig::default_mainlines(),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -47,5 +63,11 @@ fn default_two() -> u8 {
 impl Config {
     pub fn from_toml_string(input: &str) -> Result<Config, toml::de::Error> {
         toml::from_str(input)
+    }
+}
+
+impl GitConfig {
+    fn default_mainlines() -> Vec<String> {
+        vec!["HEAD".into()]
     }
 }

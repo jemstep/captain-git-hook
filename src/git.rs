@@ -1,12 +1,13 @@
 use crate::error::CapnError;
 use crate::keyring::Keyring;
 use git2;
-use git2::{ObjectType, Oid, Repository};
+use git2::{ErrorClass, ObjectType, Oid, Repository};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fs::File;
 use std::io::prelude::*;
+use std::path::Path;
 use std::process::*;
 use std::str;
 
@@ -31,7 +32,6 @@ pub struct Tag {
 }
 
 pub trait Git: Sized {
-    fn new() -> Result<Self, Box<dyn Error>>;
     fn read_file(&self, path: &str) -> Result<String, Box<dyn Error>>;
     fn write_git_file(
         &self,
@@ -46,7 +46,7 @@ pub trait Git: Sized {
         commit_id: Oid,
         override_tag_pattern: &Option<String>,
     ) -> Result<Commit, Box<dyn Error>>;
-    fn find_commits(
+    fn find_new_commits(
         &self,
         exclusions: &[Oid],
         inclusions: &[Oid],
@@ -55,15 +55,15 @@ pub trait Git: Sized {
 
     fn is_merge_commit(&self, commit_id: Oid) -> bool;
     fn is_trivial_merge_commit(&self, commit: &Commit) -> Result<bool, Box<dyn Error>>;
-    fn is_head(&self, ref_name: &str) -> Result<bool, Box<dyn Error>>;
-    fn path(&self) -> &std::path::Path;
+    fn is_mainline(&self, ref_name: &str) -> Result<bool, Box<dyn Error>>;
+    fn path(&self) -> &Path;
     fn verify_commit_signature(
-        path: &std::path::Path,
+        path: &Path,
         commit: &Commit,
         keyring: &Keyring,
     ) -> Result<bool, Box<dyn Error>>;
     fn verify_tag_signature(
-        path: &std::path::Path,
+        path: &Path,
         tag: &Tag,
         keyring: &Keyring,
     ) -> Result<bool, Box<dyn Error>>;
@@ -77,18 +77,11 @@ pub trait Git: Sized {
 pub struct LiveGit {
     repo: Repository,
     tag_cache: RefCell<HashMap<Option<String>, HashMap<Oid, Vec<Tag>>>>,
+    config: GitConfig,
 }
 
 impl Git for LiveGit {
-    fn new() -> Result<Self, Box<dyn Error>> {
-        let repo = Repository::discover("./")?;
-        Ok(LiveGit {
-            repo,
-            tag_cache: RefCell::new(HashMap::new()),
-        })
-    }
-
-    fn path(&self) -> &std::path::Path {
+    fn path(&self) -> &Path {
         self.repo.path()
     }
 
@@ -180,7 +173,7 @@ impl Git for LiveGit {
         })
     }
 
-    fn find_commits(
+    fn find_new_commits(
         &self,
         exclusions: &[Oid],
         inclusions: &[Oid],
@@ -193,7 +186,21 @@ impl Git for LiveGit {
         for &exclusion in exclusions.iter().filter(|id| !id.is_zero()) {
             revwalk.hide(exclusion)?;
         }
-        revwalk.hide_head()?;
+        for mainline in &self.config.mainlines {
+            if mainline == "HEAD" {
+                revwalk.hide_head()?;
+            } else if mainline.contains(|c| c == '?' || c == '*' || c == '[') {
+                revwalk.hide_glob(&format!("refs/heads/{}", mainline))?;
+            } else {
+                match revwalk.hide_ref(&format!("refs/heads/{}", mainline)) {
+                    Ok(()) => {}
+                    Err(e) if e.class() == ErrorClass::Reference => {
+                        warn!("Failed to exclude mainline branch {}. Error: {}.\nThis could indicate that the branch doesn't exist.", mainline, e);
+                    }
+                    Err(e) => return Err(e.into()),
+                }
+            }
+        }
 
         let commits = revwalk
             .into_iter()
@@ -207,7 +214,7 @@ impl Git for LiveGit {
     }
 
     fn verify_tag_signature(
-        path: &std::path::Path,
+        path: &Path,
         tag: &Tag,
         keyring: &Keyring,
     ) -> Result<bool, Box<dyn Error>> {
@@ -261,7 +268,7 @@ impl Git for LiveGit {
     }
 
     fn verify_commit_signature(
-        path: &std::path::Path,
+        path: &Path,
         commit: &Commit,
         keyring: &Keyring,
     ) -> Result<bool, Box<dyn Error>> {
@@ -347,9 +354,34 @@ impl Git for LiveGit {
         }
     }
 
-    fn is_head(&self, ref_name: &str) -> Result<bool, Box<dyn Error>> {
-        let head = self.repo.head()?;
-        Ok(Some(ref_name) == head.name())
+    fn is_mainline(&self, ref_name: &str) -> Result<bool, Box<dyn Error>> {
+        fn is_head(git: &LiveGit, ref_name: &str) -> Result<bool, Box<dyn Error>> {
+            let head = git.repo.head()?;
+            Ok(Some(ref_name) == head.name())
+        }
+        fn matches_glob(git: &LiveGit, ref_name: &str, glob: &str) -> Result<bool, Box<dyn Error>> {
+            git.repo
+                .references_glob(&format!("refs/heads/{}", glob))?
+                .names()
+                .map(|name| name.map(|n| n == ref_name))
+                .fold(Ok(false), |acc, next| {
+                    acc.and_then(|a| next.map(|b| a || b).map_err(|e| e.into()))
+                })
+        }
+
+        self.config
+            .mainlines
+            .iter()
+            .map(|mainline_glob| {
+                if mainline_glob == "HEAD" {
+                    is_head(self, ref_name)
+                } else {
+                    matches_glob(self, ref_name, mainline_glob)
+                }
+            })
+            .fold(Ok(false), |acc, next| {
+                acc.and_then(|a| next.map(|b| a || b))
+            })
     }
 
     fn is_tag(&self, id: Oid) -> bool {
@@ -361,6 +393,24 @@ impl Git for LiveGit {
 }
 
 impl LiveGit {
+    pub fn default(path: impl AsRef<Path>) -> Result<Self, Box<dyn Error>> {
+        let repo = Repository::discover(path)?;
+        Ok(LiveGit {
+            repo,
+            tag_cache: RefCell::new(HashMap::new()),
+            config: GitConfig::default(),
+        })
+    }
+
+    pub fn new(path: impl AsRef<Path>, config: GitConfig) -> Result<Self, Box<dyn Error>> {
+        let repo = Repository::discover(path)?;
+        Ok(LiveGit {
+            repo,
+            tag_cache: RefCell::new(HashMap::new()),
+            config,
+        })
+    }
+
     fn is_identical_tree_to_any_parent(commit: &git2::Commit<'_>) -> bool {
         let tree_id = commit.tree_id();
         commit.parents().any(|p| p.tree_id() == tree_id)
@@ -441,6 +491,174 @@ impl Drop for TempRepo {
         let drop_result = std::fs::remove_dir_all(&self.repo.path());
         if let Err(e) = drop_result {
             warn!("Failed to clean up temp repo: {}", e);
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use git2::{Oid, Reference};
+    use quickcheck_macros::quickcheck;
+
+    fn valid_mainlines(mainlines: &[String]) -> bool {
+        mainlines
+            .iter()
+            .all(|mainline| !mainline.contains('\u{0}') && Reference::is_valid_name(&mainline))
+    }
+
+    #[test]
+    fn is_mainline_with_default_config_only_identifies_head_branch() {
+        let project_root = env!("CARGO_MANIFEST_DIR");
+        let git = LiveGit::default(format!("{}/tests/test-repo.git", project_root)).unwrap();
+        assert_eq!(git.is_mainline("refs/heads/master").unwrap(), true);
+        assert_eq!(git.is_mainline("refs/heads/tagged-branch").unwrap(), false);
+    }
+
+    #[test]
+    fn is_mainline_with_glob_config_does_not_identify_head_branch() {
+        let project_root = env!("CARGO_MANIFEST_DIR");
+        let git = LiveGit::new(
+            format!("{}/tests/test-repo.git", project_root),
+            GitConfig {
+                mainlines: vec!["tagged-*".into()],
+            },
+        )
+        .unwrap();
+        assert_eq!(git.is_mainline("refs/heads/master").unwrap(), false);
+        assert_eq!(git.is_mainline("refs/heads/tagged-branch").unwrap(), true);
+    }
+
+    #[test]
+    fn is_mainline_with_literal_config_does_not_identify_head_branch() {
+        let project_root = env!("CARGO_MANIFEST_DIR");
+        let git = LiveGit::new(
+            format!("{}/tests/test-repo.git", project_root),
+            GitConfig {
+                mainlines: vec!["tagged-branch".into()],
+            },
+        )
+        .unwrap();
+        assert_eq!(git.is_mainline("refs/heads/master").unwrap(), false);
+        assert_eq!(git.is_mainline("refs/heads/tagged-branch").unwrap(), true);
+    }
+
+    #[quickcheck]
+    fn is_mainline_fuzz(branch: String, mainlines: Vec<String>) {
+        if valid_mainlines(&mainlines) {
+            let project_root = env!("CARGO_MANIFEST_DIR");
+            let git = LiveGit::new(
+                format!("{}/tests/test-repo.git", project_root),
+                GitConfig { mainlines },
+            )
+            .unwrap();
+            git.is_mainline(&branch).unwrap();
+        }
+    }
+
+    #[test]
+    fn is_mainline_with_multiple_glob_config_identifies_all_matches() {
+        let project_root = env!("CARGO_MANIFEST_DIR");
+        let git = LiveGit::new(
+            format!("{}/tests/test-repo.git", project_root),
+            GitConfig {
+                mainlines: vec!["HEAD".into(), "tagged-*".into()],
+            },
+        )
+        .unwrap();
+        assert_eq!(git.is_mainline("refs/heads/master").unwrap(), true);
+        assert_eq!(git.is_mainline("refs/heads/tagged-branch").unwrap(), true);
+    }
+
+    #[test]
+    fn new_commits_off_master_with_default_config() {
+        let project_root = env!("CARGO_MANIFEST_DIR");
+        let git = LiveGit::default(format!("{}/tests/test-repo.git", project_root)).unwrap();
+        let commits = git
+            .find_new_commits(
+                &[Oid::from_str("eb5e0185546b0bb1a13feec6b9ee8b39985fea42").unwrap()],
+                &[Oid::from_str("6004dfdb071c71e5e76ad55b924b576487e1c485").unwrap()],
+                &None,
+            )
+            .unwrap();
+        assert_eq!(commits.len(), 2)
+    }
+
+    #[test]
+    fn new_commits_off_master_with_configured_mainline_glob() {
+        let project_root = env!("CARGO_MANIFEST_DIR");
+        let git = LiveGit::new(
+            format!("{}/tests/test-repo.git", project_root),
+            GitConfig {
+                mainlines: vec!["HEAD".into(), "valid-*".into()],
+            },
+        )
+        .unwrap();
+        let commits = git
+            .find_new_commits(
+                &[Oid::from_str("eb5e0185546b0bb1a13feec6b9ee8b39985fea42").unwrap()],
+                &[Oid::from_str("6004dfdb071c71e5e76ad55b924b576487e1c485").unwrap()],
+                &None,
+            )
+            .unwrap();
+        assert_eq!(commits.len(), 1)
+    }
+
+    #[test]
+    fn new_commits_off_master_with_configured_mainline_literal_branch_name() {
+        let project_root = env!("CARGO_MANIFEST_DIR");
+        let git = LiveGit::new(
+            format!("{}/tests/test-repo.git", project_root),
+            GitConfig {
+                mainlines: vec!["HEAD".into(), "valid-branch".into()],
+            },
+        )
+        .unwrap();
+        let commits = git
+            .find_new_commits(
+                &[Oid::from_str("eb5e0185546b0bb1a13feec6b9ee8b39985fea42").unwrap()],
+                &[Oid::from_str("6004dfdb071c71e5e76ad55b924b576487e1c485").unwrap()],
+                &None,
+            )
+            .unwrap();
+        assert_eq!(commits.len(), 1)
+    }
+
+    #[test]
+    fn new_commits_off_master_with_configured_mainline_literal_branch_doesnt_exist() {
+        let project_root = env!("CARGO_MANIFEST_DIR");
+        let git = LiveGit::new(
+            format!("{}/tests/test-repo.git", project_root),
+            GitConfig {
+                mainlines: vec!["HEAD".into(), "this-branch-does-not-exist-asdfg".into()],
+            },
+        )
+        .unwrap();
+        let commits = git
+            .find_new_commits(
+                &[Oid::from_str("eb5e0185546b0bb1a13feec6b9ee8b39985fea42").unwrap()],
+                &[Oid::from_str("6004dfdb071c71e5e76ad55b924b576487e1c485").unwrap()],
+                &None,
+            )
+            .unwrap();
+        assert_eq!(commits.len(), 2)
+    }
+
+    #[quickcheck]
+    fn new_commits_fuzz(mainlines: Vec<String>) {
+        if valid_mainlines(&mainlines) {
+            let project_root = env!("CARGO_MANIFEST_DIR");
+            let git = LiveGit::new(
+                format!("{}/tests/test-repo.git", project_root),
+                GitConfig { mainlines },
+            )
+            .unwrap();
+            git.find_new_commits(
+                &[Oid::from_str("eb5e0185546b0bb1a13feec6b9ee8b39985fea42").unwrap()],
+                &[Oid::from_str("6004dfdb071c71e5e76ad55b924b576487e1c485").unwrap()],
+                &None,
+            )
+            .unwrap();
         }
     }
 }
