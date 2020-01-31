@@ -261,13 +261,13 @@ fn verify_git_commits_author_merged_own_code_not_on_head() {
 }
 
 #[test]
-fn verify_git_commits_author_merged_own_code_on_configured_mainline() {
+fn verify_git_commits_author_trivial_merge_between_mainlines() {
     before_all();
     let result = policies::verify_git_commits::<LiveGit, MockGpg>(
         &LiveGit::new(
             "./",
             GitConfig {
-                mainlines: vec!["valid-*".into()],
+                mainlines: vec!["master".into(), "valid-*".into()],
             },
         )
         .unwrap(),
@@ -278,7 +278,7 @@ fn verify_git_commits_author_merged_own_code_on_configured_mainline() {
         "refs/heads/valid-branch",
     )
     .unwrap();
-    assert!(result.is_err());
+    assert!(result.is_ok(), "Error: {:?}", result);
 }
 
 #[test]
