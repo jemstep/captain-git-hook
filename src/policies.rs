@@ -324,7 +324,7 @@ fn verify_different_authors<G: Git>(
         info!("Multiple author verification passed for {}: No new commits pushed, does not require multiple authors", new_commit_id);
         Ok(PolicyResult::Ok)
     } else if commits.len() == 1 && commits[0].is_identical_tree_to_any_parent {
-        info!("Multiple author verification passed for {}: There is only one commit and it has an identical filetree to one of its parent.", new_commit_id);
+        info!("Multiple author verification passed for {}: There is only one commit and it has an identical filetree to one of its parents", new_commit_id);
         Ok(PolicyResult::Ok)
     } else if commits.len() == 1 && git.is_trivial_merge_commit(&commits[0])? {
         info!("Multiple author verification passed for {}: There is only one commit and it is a trivial merge between mainline branches", new_commit_id);
