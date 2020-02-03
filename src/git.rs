@@ -570,80 +570,6 @@ mod test {
         assert_eq!(git.is_mainline("refs/heads/tagged-branch").unwrap(), true);
     }
 
-    #[test]
-    fn new_commits_off_master_with_default_config() {
-        let project_root = env!("CARGO_MANIFEST_DIR");
-        let git = LiveGit::default(format!("{}/tests/test-repo.git", project_root)).unwrap();
-        let commits = git
-            .find_new_commits(
-                &[Oid::from_str("eb5e0185546b0bb1a13feec6b9ee8b39985fea42").unwrap()],
-                &[Oid::from_str("6004dfdb071c71e5e76ad55b924b576487e1c485").unwrap()],
-                &None,
-            )
-            .unwrap();
-        assert_eq!(commits.len(), 2)
-    }
-
-    #[test]
-    fn new_commits_off_master_with_configured_mainline_glob() {
-        let project_root = env!("CARGO_MANIFEST_DIR");
-        let git = LiveGit::new(
-            format!("{}/tests/test-repo.git", project_root),
-            GitConfig {
-                mainlines: vec!["HEAD".into(), "valid-*".into()],
-            },
-        )
-        .unwrap();
-        let commits = git
-            .find_new_commits(
-                &[Oid::from_str("eb5e0185546b0bb1a13feec6b9ee8b39985fea42").unwrap()],
-                &[Oid::from_str("6004dfdb071c71e5e76ad55b924b576487e1c485").unwrap()],
-                &None,
-            )
-            .unwrap();
-        assert_eq!(commits.len(), 1)
-    }
-
-    #[test]
-    fn new_commits_off_master_with_configured_mainline_literal_branch_name() {
-        let project_root = env!("CARGO_MANIFEST_DIR");
-        let git = LiveGit::new(
-            format!("{}/tests/test-repo.git", project_root),
-            GitConfig {
-                mainlines: vec!["HEAD".into(), "valid-branch".into()],
-            },
-        )
-        .unwrap();
-        let commits = git
-            .find_new_commits(
-                &[Oid::from_str("eb5e0185546b0bb1a13feec6b9ee8b39985fea42").unwrap()],
-                &[Oid::from_str("6004dfdb071c71e5e76ad55b924b576487e1c485").unwrap()],
-                &None,
-            )
-            .unwrap();
-        assert_eq!(commits.len(), 1)
-    }
-
-    #[test]
-    fn new_commits_off_master_with_configured_mainline_literal_branch_doesnt_exist() {
-        let project_root = env!("CARGO_MANIFEST_DIR");
-        let git = LiveGit::new(
-            format!("{}/tests/test-repo.git", project_root),
-            GitConfig {
-                mainlines: vec!["HEAD".into(), "this-branch-does-not-exist-asdfg".into()],
-            },
-        )
-        .unwrap();
-        let commits = git
-            .find_new_commits(
-                &[Oid::from_str("eb5e0185546b0bb1a13feec6b9ee8b39985fea42").unwrap()],
-                &[Oid::from_str("6004dfdb071c71e5e76ad55b924b576487e1c485").unwrap()],
-                &None,
-            )
-            .unwrap();
-        assert_eq!(commits.len(), 2)
-    }
-
     #[quickcheck]
     fn new_commits_fuzz(mainlines: Vec<String>) {
         if valid_mainlines(&mainlines) {
@@ -659,6 +585,93 @@ mod test {
                 &None,
             )
             .unwrap();
+        }
+    }
+
+    mod find_new_commits {
+        use super::super::*;
+        use git2::Oid;
+
+        // These tests are running on these commits:
+        //
+        // *   6004dfd (same-author) Merge branch 'valid-branch' into same-author
+        // |\
+        // | * 26b9047 (valid-branch) Valid commit on a branch
+        // |/
+        // * eb5e018 (HEAD -> master) A second valid commit
+
+        #[test]
+        fn finds_all_commits_ahead_of_head_with_default_config() {
+            let project_root = env!("CARGO_MANIFEST_DIR");
+            let git = LiveGit::default(format!("{}/tests/test-repo.git", project_root)).unwrap();
+            let commits = git
+                .find_new_commits(
+                    &[Oid::from_str("eb5e0185546b0bb1a13feec6b9ee8b39985fea42").unwrap()],
+                    &[Oid::from_str("6004dfdb071c71e5e76ad55b924b576487e1c485").unwrap()],
+                    &None,
+                )
+                .unwrap();
+            assert_eq!(commits.len(), 2)
+        }
+
+        #[test]
+        fn finds_only_commits_in_none_of_the_mainlines_with_glob_configuration() {
+            let project_root = env!("CARGO_MANIFEST_DIR");
+            let git = LiveGit::new(
+                format!("{}/tests/test-repo.git", project_root),
+                GitConfig {
+                    mainlines: vec!["HEAD".into(), "valid-*".into()],
+                },
+            )
+            .unwrap();
+            let commits = git
+                .find_new_commits(
+                    &[Oid::from_str("eb5e0185546b0bb1a13feec6b9ee8b39985fea42").unwrap()],
+                    &[Oid::from_str("6004dfdb071c71e5e76ad55b924b576487e1c485").unwrap()],
+                    &None,
+                )
+                .unwrap();
+            assert_eq!(commits.len(), 1)
+        }
+
+        #[test]
+        fn finds_only_commits_in_none_of_the_mainlines_with_literal_branch_name_configuration() {
+            let project_root = env!("CARGO_MANIFEST_DIR");
+            let git = LiveGit::new(
+                format!("{}/tests/test-repo.git", project_root),
+                GitConfig {
+                    mainlines: vec!["HEAD".into(), "valid-branch".into()],
+                },
+            )
+            .unwrap();
+            let commits = git
+                .find_new_commits(
+                    &[Oid::from_str("eb5e0185546b0bb1a13feec6b9ee8b39985fea42").unwrap()],
+                    &[Oid::from_str("6004dfdb071c71e5e76ad55b924b576487e1c485").unwrap()],
+                    &None,
+                )
+                .unwrap();
+            assert_eq!(commits.len(), 1)
+        }
+
+        #[test]
+        fn finds_only_commits_in_none_of_the_mainlines_with_missing_branch_in_configuration() {
+            let project_root = env!("CARGO_MANIFEST_DIR");
+            let git = LiveGit::new(
+                format!("{}/tests/test-repo.git", project_root),
+                GitConfig {
+                    mainlines: vec!["HEAD".into(), "this-branch-does-not-exist-asdfg".into()],
+                },
+            )
+            .unwrap();
+            let commits = git
+                .find_new_commits(
+                    &[Oid::from_str("eb5e0185546b0bb1a13feec6b9ee8b39985fea42").unwrap()],
+                    &[Oid::from_str("6004dfdb071c71e5e76ad55b924b576487e1c485").unwrap()],
+                    &None,
+                )
+                .unwrap();
+            assert_eq!(commits.len(), 2)
         }
     }
 }
