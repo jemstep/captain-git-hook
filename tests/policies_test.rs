@@ -261,6 +261,27 @@ fn verify_git_commits_author_merged_own_code_not_on_head() {
 }
 
 #[test]
+fn verify_git_commits_author_merged_own_code_on_configured_mainline() {
+    before_all();
+    let result = policies::verify_git_commits::<LiveGit, MockGpg>(
+        &LiveGit::new(
+            "./",
+            GitConfig {
+                mainlines: vec!["m*".into()],
+            },
+        )
+        .unwrap(),
+        MockGpg,
+        &verify_commits_config(),
+        "eb5e0185546b0bb1a13feec6b9ee8b39985fea42",
+        "6004dfdb071c71e5e76ad55b924b576487e1c485",
+        "refs/heads/master",
+    )
+    .unwrap();
+    assert!(result.is_err());
+}
+
+#[test]
 fn verify_git_commits_author_trivial_merge_between_mainlines() {
     before_all();
     let result = policies::verify_git_commits::<LiveGit, MockGpg>(
