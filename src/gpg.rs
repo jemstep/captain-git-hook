@@ -57,16 +57,15 @@ impl Gpg for LiveGpg {
                 .args(&["--keyserver", &self.keyserver])
                 .arg("--recv-keys")
                 .args(fingerprints)
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .status()?;
+                .output()?;
 
-            if result.success() {
+            if result.status.success() {
                 Ok(())
             } else {
+                debug!("GPG Stderr: {:?}", String::from_utf8(result.stderr));
                 Err(Box::new(CapnError::new(format!(
                     "Call to GPG keyserver failed with code {:?}",
-                    result.code()
+                    result.status.code()
                 ))))
             }
         };
