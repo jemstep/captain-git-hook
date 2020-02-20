@@ -169,7 +169,25 @@ git push <remote> <tag-name>
 #+END_SRC
 
 *** Monitoring
-# TODO
+By default, logging output is produced to the terminal, following the
+convention of output to stdout, diagnostics to stderr.
+
+Additional diagnostics can be produced to stderr by specifying =-v= or
+=--verbose= on the command line. For example, =capn -v pre-receive=
+will produce debug level logging, which =capn pre-receive= will only
+produce info level logging.
+
+Diagnostic logging over TCP is also supported with the =--log-url=
+command line parameter. Network logs are sent in JSON format.
+
+In the case of network logging, it's usually useful to provide some
+data to contextualise the log. A server side hook using all of the
+context parameters would look like this:
+
+#+BEGIN_SRC rust
+  capn-qa -vv --log-url 10.0.0.123:123 --repo "$GITHUB_REPO_NAME" --user "$GITHUB_USER_LOGIN" --ip "$GITHUB_USER_IP" pre-receive
+#+END_SRC
+
 * Development
 ** High level architecture
 
