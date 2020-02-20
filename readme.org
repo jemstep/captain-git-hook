@@ -56,6 +56,15 @@ This will add an executable to your path called ~capn~.
 #+END_SRC
 
 ** Usage
+*** Runtime Dependencies
+Captain Git Hook requires certain command line applications to be
+installed and on the path.
+- git - This is used as a binary on the CLI only for cases unsupported
+  by libgit2, such as verifying signatures.
+- gpg - This is used for verifying signatures.
+- dirmngr - This is a gpg component that gpg uses as part of fetching
+  gpg keys from a keyserver. On some distros, this is bundled together
+  with gpg.
 
 *** Git Hooks
 Captain Git Hook works by installing hooks in your Git repository. Git
@@ -75,6 +84,11 @@ recieved by a Git server.
 How to install this will depend on how you administrate your Git
 server. For example, these are the instructions for GitHub Enterprise:
 [[https://help.github.com/en/enterprise/2.19/admin/developer-workflow/managing-pre-receive-hooks-on-the-github-enterprise-server-appliance][Managing pre-receive hooks on the GitHub Enterprise Server appliance]].
+
+Some Git servers, like GitHub Enterprise, require specifying a sandbox
+environment for the pre-receive hook to run in. For convenience, we
+include a Dockerfile and script for setting up a GitHub Enterprise
+sandbox. [[./github/readme.org]]
 
 *** Policy Configuration
 
@@ -154,6 +168,8 @@ git tag --sign <tag-name>
 git push <remote> <tag-name>
 #+END_SRC
 
+*** Monitoring
+# TODO
 * Development
 ** High level architecture
 

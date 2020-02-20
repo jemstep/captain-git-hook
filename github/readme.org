@@ -1,0 +1,28 @@
+* GitHub Enterprise Pre-receive Hook Sandbox Environment
+
+GitHub Enterprise imposes certain additional requirements on running
+server-side pre-receive hooks.
+
+1. The hook has a strict 5 second time limit in which to run.
+2. The hook must run within a sandboxed environment, which only lives
+   for the duration of the hook running. The default does not work for
+   Captain Git Hook because it does not include dirmngr.
+
+A suitable sandbox is specified in [[./Dockerfile]]. You can build this
+Dockerfile into an appropriate tarball for upload to GitHub using the
+script [[./create-github-pre-receive-environment.sh]].
+
+#+BEGIN_SRC sh
+  # run this in the same directory as this readme
+  cd github
+
+  # this produces capn-pre-receive.tar.gz
+  ./create-github-pre-receive-environment.sh
+  
+  # you can now upload the tarball to GitHub
+#+END_SRC
+
+The following two documents show how to set up this sandbox
+environment on GitHub:
+- [[https://help.github.com/en/enterprise/2.20/admin/developer-workflow/creating-a-pre-receive-hook-environment]]
+- [[https://help.github.com/en/enterprise/2.20/admin/developer-workflow/managing-pre-receive-hooks-on-the-github-enterprise-server-appliance]]
