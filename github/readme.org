@@ -7,18 +7,21 @@ server-side pre-receive hooks.
 2. The hook must run within a sandboxed environment, which only lives
    for the duration of the hook running. The default does not work for
    Captain Git Hook because it does not include dirmngr.
+3. GitHub runs the hook in Firejail, which may impose additional
+   limitations. The one that I ran into is that gpg could not
+   communicate with dirmngr over a socket.
 
 A suitable sandbox is specified in [[./Dockerfile]]. You can build this
 Dockerfile into an appropriate tarball for upload to GitHub using the
 script [[./create-github-pre-receive-environment.sh]].
 
 #+BEGIN_SRC sh
-  # run this in the same directory as this readme
+  # we're running the script in the same directory as this readme, but you can run it from anywhere
   cd github
 
   # this produces capn-pre-receive.tar.gz
   ./create-github-pre-receive-environment.sh
-  
+
   # you can now upload the tarball to GitHub
 #+END_SRC
 
