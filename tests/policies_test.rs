@@ -365,3 +365,39 @@ fn verify_tagged_git_commits_not_overridden_if_not_enough_tags() {
     .unwrap();
     assert!(result.is_err());
 }
+
+#[test]
+fn verify_unrebased_branch_is_allowed_if_not_required() {
+    before_all();
+    let result = policies::verify_git_commits::<LiveGit, MockGpg>(
+        &LiveGit::default("./").unwrap(),
+        MockGpg,
+        &VerifyGitCommitsConfig {
+            verify_rebased: false,
+            ..verify_commits_config()
+        },
+        "7f9763e189ade34345e683ab7e0c22d164280452",
+        "6eea56095f7498043f1d3d74bad46056b92675ea",
+        "refs/heads/master",
+    )
+    .unwrap();
+    assert!(result.is_ok(), "Error: {:?}", result);
+}
+
+#[test]
+fn verify_unrebased_branch_is_blocked_if_required() {
+    before_all();
+    let result = policies::verify_git_commits::<LiveGit, MockGpg>(
+        &LiveGit::default("./").unwrap(),
+        MockGpg,
+        &VerifyGitCommitsConfig {
+            verify_rebased: true,
+            ..verify_commits_config()
+        },
+        "7f9763e189ade34345e683ab7e0c22d164280452",
+        "6eea56095f7498043f1d3d74bad46056b92675ea",
+        "refs/heads/master",
+    )
+    .unwrap();
+    assert!(result.is_err());
+}
