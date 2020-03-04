@@ -25,6 +25,7 @@ pub enum PolicyResult {
     MissingAuthorEmail(Oid),
     InvalidCommitterEmail(Oid, String),
     MissingCommitterEmail(Oid),
+    NotRebased(Oid),
 }
 
 impl PolicyResult {
@@ -58,6 +59,7 @@ impl fmt::Display for PolicyResult {
             MissingAuthorEmail(id) => write!(f, "Commit does not have an author email: {}", id),
             InvalidCommitterEmail(id, email) => write!(f, "Commit has an invalid committer email ({}): {}", email, id),
             MissingCommitterEmail(id) => write!(f, "Commit does not have a committer email: {}", id),
+            NotRebased(id) => write!(f, "Merge commit needs to be rebased on the mainline before it can be merged: {}", id)
         }
     }
 }
@@ -150,6 +152,16 @@ pub fn verify_git_commits<G: Git, P: Gpg>(
 
         if config.verify_different_authors {
             policy_result = policy_result.and(verify_different_authors::<G>(
+                &all_commits,
+                git,
+                old_commit_id,
+                new_commit_id,
+                ref_name,
+            )?);
+        }
+
+        if config.verify_rebased {
+            policy_result = policy_result.and(verify_rebased::<G>(
                 &all_commits,
                 git,
                 old_commit_id,
@@ -351,6 +363,50 @@ fn verify_different_authors<G: Git>(
                 new_commit_id, authors
             );
             Ok(PolicyResult::Ok)
+        }
+    }
+}
+
+fn verify_rebased<G: Git>(
+    commits: &[Commit],
+    git: &G,
+    old_commit_id: Oid,
+    new_commit_id: Oid,
+    ref_name: &str,
+) -> Result<PolicyResult, Box<dyn Error>> {
+    let new_branch = old_commit_id.is_zero();
+    let is_merge = git.is_merge_commit(new_commit_id);
+    let is_mainline = git.is_mainline(ref_name)?;
+
+    if !is_mainline {
+        info!(
+            "Rebase verification passed for {}: Not updating a mainline branch",
+            new_commit_id
+        );
+        Ok(PolicyResult::Ok)
+    } else if !is_merge {
+        info!("Rebase verification passed for {}: Not a merge commit, does not require multiple authors", new_commit_id);
+        Ok(PolicyResult::Ok)
+    } else if new_branch {
+        info!("Rebase verification passed for {}: New branch does not require multiple authors for a merge commit", new_commit_id);
+        Ok(PolicyResult::Ok)
+    } else if commits.len() == 0 {
+        info!("Rebase verification passed for {}: No new commits pushed, does not require multiple authors", new_commit_id);
+        Ok(PolicyResult::Ok)
+    } else {
+        let new_commit_is_identical_tree_to_parent = commits
+            .iter()
+            .find(|commit| commit.id == new_commit_id && commit.is_identical_tree_to_any_parent)
+            .is_some();
+        if new_commit_is_identical_tree_to_parent {
+            info!(
+                "Rebase verification passed for {}: Branch is up to date rebased",
+                new_commit_id
+            );
+            Ok(PolicyResult::Ok)
+        } else {
+            error!("Rebase verification failed for {}: branch must be rebased before it can be merged into the mainline", new_commit_id);
+            Ok(PolicyResult::NotRebased(new_commit_id))
         }
     }
 }

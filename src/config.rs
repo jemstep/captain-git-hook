@@ -38,6 +38,8 @@ pub struct VerifyGitCommitsConfig {
 
     #[serde(default = "default_false")]
     pub verify_different_authors: bool,
+    #[serde(default = "default_false")]
+    pub verify_rebased: bool,
 
     #[serde(default)]
     pub override_tag_pattern: Option<String>,
