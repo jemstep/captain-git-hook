@@ -385,22 +385,27 @@ fn verify_rebased<G: Git>(
         );
         Ok(PolicyResult::Ok)
     } else if !is_merge {
-        info!("Rebase verification passed for {}: Not a merge commit, does not require multiple authors", new_commit_id);
+        info!(
+            "Rebase verification passed for {}: Not a merge commit",
+            new_commit_id
+        );
         Ok(PolicyResult::Ok)
     } else if new_branch {
-        info!("Rebase verification passed for {}: New branch does not require multiple authors for a merge commit", new_commit_id);
+        info!("Rebase verification passed for {}: New branch does not require being rebased for a merge commit", new_commit_id);
         Ok(PolicyResult::Ok)
     } else if commits.len() == 0 {
-        info!("Rebase verification passed for {}: No new commits pushed, does not require multiple authors", new_commit_id);
+        info!(
+            "Rebase verification passed for {}: No new commits pushed",
+            new_commit_id
+        );
         Ok(PolicyResult::Ok)
     } else {
         let new_commit_is_identical_tree_to_parent = commits
             .iter()
-            .find(|commit| commit.id == new_commit_id && commit.is_identical_tree_to_any_parent)
-            .is_some();
+            .any(|commit| commit.id == new_commit_id && commit.is_identical_tree_to_any_parent);
         if new_commit_is_identical_tree_to_parent {
             info!(
-                "Rebase verification passed for {}: Branch is up to date rebased",
+                "Rebase verification passed for {}: Branch is up to date with the mainline it's being merged into",
                 new_commit_id
             );
             Ok(PolicyResult::Ok)
