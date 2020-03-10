@@ -437,3 +437,21 @@ fn verify_unrebased_branch_is_blocked_when_mainline_has_reverts() {
     .unwrap();
     assert!(result.is_err());
 }
+
+#[test]
+fn verify_rebased_branch_is_allowed_when_a_force_push_has_occurred() {
+    before_all();
+    let result = policies::verify_git_commits::<LiveGit, MockGpg>(
+        &LiveGit::default("./").unwrap(),
+        MockGpg,
+        &VerifyGitCommitsConfig {
+            verify_rebased: true,
+            ..verify_commits_config()
+        },
+        "eb5e0185546b0bb1a13feec6b9ee8b39985fea42",
+        "02bb68e637bda7667428f8fb3b709be5720fe76a",
+        "refs/heads/master",
+    )
+    .unwrap();
+    assert!(result.is_ok(), "Error: {:?}", result);
+}

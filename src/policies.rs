@@ -380,6 +380,7 @@ fn verify_rebased<G: Git>(
     let is_merge = git.is_merge_commit(new_commit_id);
     let is_mainline = git.is_mainline(ref_name)?;
     let new_commit = git.find_commit(new_commit_id, override_tag_pattern)?;
+    let is_not_fast_forward = !git.is_descendent_of(new_commit_id, old_commit_id)?;
 
     if !is_mainline {
         info!(
@@ -400,6 +401,13 @@ fn verify_rebased<G: Git>(
         info!(
             "Rebase verification passed for {}: No new commits pushed",
             new_commit_id
+        );
+        Ok(PolicyResult::Ok)
+    } else if is_not_fast_forward {
+        info!(
+            "Rebase verification passed for {0}: Commit Id {0} is not a descendent of Commit Id {1}, it is most likely that a force-push has occurred",
+            new_commit_id,
+            old_commit_id
         );
         Ok(PolicyResult::Ok)
     } else {
