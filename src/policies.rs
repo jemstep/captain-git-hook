@@ -167,6 +167,7 @@ pub fn verify_git_commits<G: Git, P: Gpg>(
                 old_commit_id,
                 new_commit_id,
                 ref_name,
+                &config.override_tag_pattern,
             )?);
         }
     }
@@ -373,10 +374,12 @@ fn verify_rebased<G: Git>(
     old_commit_id: Oid,
     new_commit_id: Oid,
     ref_name: &str,
+    override_tag_pattern: &Option<String>,
 ) -> Result<PolicyResult, Box<dyn Error>> {
     let new_branch = old_commit_id.is_zero();
     let is_merge = git.is_merge_commit(new_commit_id);
     let is_mainline = git.is_mainline(ref_name)?;
+    let new_commit = git.find_commit(new_commit_id, override_tag_pattern)?;
 
     if !is_mainline {
         info!(
@@ -400,10 +403,18 @@ fn verify_rebased<G: Git>(
         );
         Ok(PolicyResult::Ok)
     } else {
-        let new_commit_is_identical_tree_to_parent = commits
+        let new_commit_is_rebased = new_commit
+            .parents
             .iter()
-            .any(|commit| commit.id == new_commit_id && commit.is_identical_tree_to_any_parent);
-        if new_commit_is_identical_tree_to_parent {
+            .map(|parent_id| {
+                git.is_descendent_of(*parent_id, old_commit_id)
+                    .map(|is_descendent| is_descendent || *parent_id == old_commit_id)
+            })
+            .collect::<Result<Vec<bool>, _>>()?
+            .iter()
+            .all(|x| *x);
+
+        if new_commit_is_rebased {
             info!(
                 "Rebase verification passed for {}: Branch is up to date with the mainline it's being merged into",
                 new_commit_id

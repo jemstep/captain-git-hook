@@ -22,6 +22,7 @@ pub struct Commit {
     pub is_identical_tree_to_any_parent: bool,
     pub is_merge_commit: bool,
     pub tags: Vec<Tag>,
+    pub parents: Vec<Oid>,
 }
 
 #[derive(Debug, Clone)]
@@ -72,6 +73,7 @@ pub trait Git: Sized {
         let config = Config::from_toml_string(&config_str)?;
         Ok(config)
     }
+    fn is_descendent_of(&self, commit: Oid, ancestor: Oid) -> Result<bool, Box<dyn Error>>;
 }
 
 pub struct LiveGit {
@@ -170,6 +172,7 @@ impl Git for LiveGit {
             is_merge_commit: commit.parent_count() > 1,
             is_identical_tree_to_any_parent: Self::is_identical_tree_to_any_parent(&commit),
             tags: tags,
+            parents: commit.parent_ids().collect(),
         })
     }
 
@@ -389,6 +392,12 @@ impl Git for LiveGit {
             Ok(_) => true,
             _ => false,
         }
+    }
+
+    fn is_descendent_of(&self, commit: Oid, ancestor: Oid) -> Result<bool, Box<dyn Error>> {
+        self.repo
+            .graph_descendant_of(commit, ancestor)
+            .map_err(|e| e.into())
     }
 }
 

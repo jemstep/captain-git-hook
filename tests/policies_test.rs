@@ -268,7 +268,7 @@ fn verify_git_commits_author_merged_own_code_on_configured_mainline() {
         &LiveGit::new(
             "./",
             GitConfig {
-                mainlines: vec!["m*".into()],
+                mainlines: vec!["master".into()],
             },
         )
         .unwrap(),
@@ -376,7 +376,7 @@ fn verify_unrebased_branch_is_allowed_if_not_required() {
             verify_rebased: false,
             ..verify_commits_config()
         },
-        "7f9763e189ade34345e683ab7e0c22d164280452",
+        "eb5e0185546b0bb1a13feec6b9ee8b39985fea42",
         "6eea56095f7498043f1d3d74bad46056b92675ea",
         "refs/heads/master",
     )
@@ -394,7 +394,7 @@ fn verify_unrebased_branch_is_blocked_if_required() {
             verify_rebased: true,
             ..verify_commits_config()
         },
-        "7f9763e189ade34345e683ab7e0c22d164280452",
+        "eb5e0185546b0bb1a13feec6b9ee8b39985fea42",
         "6eea56095f7498043f1d3d74bad46056b92675ea",
         "refs/heads/master",
     )
@@ -418,4 +418,22 @@ fn verify_rebased_branch_is_allowed_when_required() {
     )
     .unwrap();
     assert!(result.is_ok(), "Error: {:?}", result);
+}
+
+#[test]
+fn verify_unrebased_branch_is_blocked_when_mainline_has_reverts() {
+    before_all();
+    let result = policies::verify_git_commits::<LiveGit, MockGpg>(
+        &LiveGit::default("./").unwrap(),
+        MockGpg,
+        &VerifyGitCommitsConfig {
+            verify_rebased: true,
+            ..verify_commits_config()
+        },
+        "3f48e07e5f8d5ab932a0a298ba3dd52809eef6d2",
+        "3911fdcbba1621d39096cef1bddbf4b35be2aeb6",
+        "refs/heads/master",
+    )
+    .unwrap();
+    assert!(result.is_err());
 }
