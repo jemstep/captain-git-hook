@@ -401,3 +401,21 @@ fn verify_unrebased_branch_is_blocked_if_required() {
     .unwrap();
     assert!(result.is_err());
 }
+
+#[test]
+fn verify_rebased_branch_is_allowed_when_required() {
+    before_all();
+    let result = policies::verify_git_commits::<LiveGit, MockGpg>(
+        &LiveGit::default("./").unwrap(),
+        MockGpg,
+        &VerifyGitCommitsConfig {
+            verify_rebased: true,
+            ..verify_commits_config()
+        },
+        "eb5e0185546b0bb1a13feec6b9ee8b39985fea42",
+        "3eb315d10e2ad89555d7bfc78a1db1ce07bce434",
+        "refs/heads/master",
+    )
+    .unwrap();
+    assert!(result.is_ok(), "Error: {:?}", result);
+}
