@@ -234,22 +234,9 @@ turned on in the configuration passed successfully.
 Some of the end to end tests require a valid Git repository and GPG
 key to run.
 
-*** The test repo
-
 To facilitate this, there is a bare Git repo, set up as a test
 repository, checked in to the tests folder of this repo. It is located
 at [[./tests/test-repo.git]].
-
-To add extra testing scenarios, you'll probably need to add additional
-commits to this bare repo. To do this, clone the repo somewhere else
-on your drive with 
-
-#+BEGIN_SRC sh
-  git clone <path to test-repo.git>
-#+END_SRC
-
-Make any required commits, and push the changes back. Then commit the
-changes in this repo.
 
 *** GPG keys and the test repo
 
@@ -257,15 +244,36 @@ To create valid commits for these tests, you need to sign the commits
 with the secret key in [[./tests/test-secret-key.asc]]. The password to
 import this key is 'test'.
 
-After you've impored that key into your GPG keyring, it's recommended
-that you change your local git settings in the test repo to use the
-test user and the test GPG key.
+You can import the key into your GPG keyring with the following command:
 
 #+BEGIN_SRC sh
+  # This command will prompt you for the key's password. The password is 'test'.
+
+  gpg --import ./tests/test-secret-key.asc
+#+END_SRC
+
+*** Cloning the test repo to make changes
+
+To add extra testing scenarios, you'll probably need to add additional
+commits to this bare repo. It's recommended to, as well as cloning the
+test repo, also set your user inside the test repo to a test user.
+
+The test user uses the test GPG key that you imported above.
+
+#+BEGIN_SRC sh
+  # run this from somewhere outside of the Capn directory
+
+  git clone <path to test-repo.git>
+
+  cd test-repo
+
   git config user.email "blackhole@jemstep.com"
   git config user.name "Test User"
   git config user.signingkey "0xE1F315E39CCCECAA"
 #+END_SRC
+
+Make any required commits, and push the changes back. Then commit the
+changes in this repo.
 
 *** Visualising the test repo
 
