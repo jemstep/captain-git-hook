@@ -264,7 +264,7 @@ test user and the test GPG key.
 #+BEGIN_SRC sh
   git config user.email "blackhole@jemstep.com"
   git config user.name "Test User"
-  git config user.signingkey = "0xE1F315E39CCCECAA"
+  git config user.signingkey "0xE1F315E39CCCECAA"
 #+END_SRC
 
 *** Visualising the test repo
