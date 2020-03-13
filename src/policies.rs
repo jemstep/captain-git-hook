@@ -34,13 +34,10 @@ pub fn verify_git_commits<G: Git, P: Gpg>(
     git: &G,
     gpg: P,
     config: &VerifyGitCommitsConfig,
-    old_value: &str,
-    new_value: &str,
-    ref_name: &str,
+    ref_update: &ReferenceUpdate,
 ) -> Result<PolicyResult, Box<dyn Error>> {
     info!("Executing policy: verify_git_commits");
     let start = Instant::now();
-    let ref_update = ReferenceUpdate::from_git_hook_format(old_value, new_value, ref_name)?;
 
     let mut policy_result = PolicyResult::Ok;
 

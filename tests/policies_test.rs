@@ -1,6 +1,7 @@
 use capn;
 use capn::config::{Config, GitConfig, VerifyGitCommitsConfig};
 use capn::policies;
+use capn::policies::reference_update::ReferenceUpdate;
 
 use capn::git::LiveGit;
 use capn::gpg::test::MockGpg;
@@ -87,9 +88,12 @@ fn verify_git_commits_happy_path_from_empty() {
         &LiveGit::default("./").unwrap(),
         MockGpg,
         &verify_commits_config(),
-        "0000000000000000000000000000000000000000",
-        "7f9763e189ade34345e683ab7e0c22d164280452",
-        "refs/heads/master",
+        &ReferenceUpdate::from_git_hook_format(
+            "0000000000000000000000000000000000000000",
+            "7f9763e189ade34345e683ab7e0c22d164280452",
+            "refs/heads/master",
+        )
+        .unwrap(),
     )
     .unwrap();
     assert!(result.is_ok(), "Error: {:?}", result);
@@ -102,9 +106,12 @@ fn verify_git_commits_happy_path_from_existing() {
         &LiveGit::default("./").unwrap(),
         MockGpg,
         &verify_commits_config(),
-        "7f9763e189ade34345e683ab7e0c22d164280452",
-        "eb5e0185546b0bb1a13feec6b9ee8b39985fea42",
-        "refs/heads/master",
+        &ReferenceUpdate::from_git_hook_format(
+            "7f9763e189ade34345e683ab7e0c22d164280452",
+            "eb5e0185546b0bb1a13feec6b9ee8b39985fea42",
+            "refs/heads/master",
+        )
+        .unwrap(),
     )
     .unwrap();
     assert!(result.is_ok(), "Error: {:?}", result);
@@ -117,9 +124,12 @@ fn verify_git_commits_happy_path_unsigned_trivial_no_fast_forward_merge() {
         &LiveGit::default("./").unwrap(),
         MockGpg,
         &verify_commits_config(),
-        "eb5e0185546b0bb1a13feec6b9ee8b39985fea42",
-        "3eb315d10e2ad89555d7bfc78a1db1ce07bce434",
-        "refs/heads/master",
+        &ReferenceUpdate::from_git_hook_format(
+            "eb5e0185546b0bb1a13feec6b9ee8b39985fea42",
+            "3eb315d10e2ad89555d7bfc78a1db1ce07bce434",
+            "refs/heads/master",
+        )
+        .unwrap(),
     )
     .unwrap();
     assert!(result.is_ok(), "Error: {:?}", result);
@@ -132,9 +142,12 @@ fn verify_git_commits_happy_path_unsigned_trivial_merge() {
         &LiveGit::default("./").unwrap(),
         MockGpg,
         &verify_commits_config(),
-        "eb5e0185546b0bb1a13feec6b9ee8b39985fea42",
-        "6754e4ec9b2dec567190d5a7f0be18b1a23d632a",
-        "refs/heads/master",
+        &ReferenceUpdate::from_git_hook_format(
+            "eb5e0185546b0bb1a13feec6b9ee8b39985fea42",
+            "6754e4ec9b2dec567190d5a7f0be18b1a23d632a",
+            "refs/heads/master",
+        )
+        .unwrap(),
     )
     .unwrap();
     assert!(result.is_ok(), "Error: {:?}", result);
@@ -147,9 +160,12 @@ fn verify_git_commits_single_unsigned_commit() {
         &LiveGit::default("./").unwrap(),
         MockGpg,
         &verify_commits_config(),
-        "eb5e0185546b0bb1a13feec6b9ee8b39985fea42",
-        "d2e3bfdc923986d04e7a6368b5fdd78b1ddf84f1",
-        "refs/heads/master",
+        &ReferenceUpdate::from_git_hook_format(
+            "eb5e0185546b0bb1a13feec6b9ee8b39985fea42",
+            "d2e3bfdc923986d04e7a6368b5fdd78b1ddf84f1",
+            "refs/heads/master",
+        )
+        .unwrap(),
     )
     .unwrap();
     assert!(result.is_err());
@@ -162,9 +178,12 @@ fn verify_git_commits_single_unsigned_commit_new_branch() {
         &LiveGit::default("./").unwrap(),
         MockGpg,
         &verify_commits_config(),
-        "0000000000000000000000000000000000000000",
-        "d2e3bfdc923986d04e7a6368b5fdd78b1ddf84f1",
-        "refs/heads/master",
+        &ReferenceUpdate::from_git_hook_format(
+            "0000000000000000000000000000000000000000",
+            "d2e3bfdc923986d04e7a6368b5fdd78b1ddf84f1",
+            "refs/heads/master",
+        )
+        .unwrap(),
     )
     .unwrap();
     assert!(result.is_err());
@@ -177,9 +196,12 @@ fn verify_git_commits_unsigned_commit_being_merged_in() {
         &LiveGit::default("./").unwrap(),
         MockGpg,
         &verify_commits_config(),
-        "eb5e0185546b0bb1a13feec6b9ee8b39985fea42",
-        "ef1710ba8bd1f5ed0eec7883af30fca732d39afd",
-        "refs/heads/master",
+        &ReferenceUpdate::from_git_hook_format(
+            "eb5e0185546b0bb1a13feec6b9ee8b39985fea42",
+            "ef1710ba8bd1f5ed0eec7883af30fca732d39afd",
+            "refs/heads/master",
+        )
+        .unwrap(),
     )
     .unwrap();
     assert!(result.is_err());
@@ -192,9 +214,12 @@ fn verify_git_commits_unsigned_commit_behind_a_merge_commit() {
         &LiveGit::default("./").unwrap(),
         MockGpg,
         &verify_commits_config(),
-        "eb5e0185546b0bb1a13feec6b9ee8b39985fea42",
-        "e9752e78505f3c9bcec15d4bef4299caf0538388",
-        "refs/heads/master",
+        &ReferenceUpdate::from_git_hook_format(
+            "eb5e0185546b0bb1a13feec6b9ee8b39985fea42",
+            "e9752e78505f3c9bcec15d4bef4299caf0538388",
+            "refs/heads/master",
+        )
+        .unwrap(),
     )
     .unwrap();
     assert!(result.is_err());
@@ -207,9 +232,12 @@ fn verify_git_commits_invalid_author() {
         &LiveGit::default("./").unwrap(),
         MockGpg,
         &verify_commits_config(),
-        "eb5e0185546b0bb1a13feec6b9ee8b39985fea42",
-        "afe2141ef20abd098927adc66d6728821cb34f59",
-        "refs/heads/master",
+        &ReferenceUpdate::from_git_hook_format(
+            "eb5e0185546b0bb1a13feec6b9ee8b39985fea42",
+            "afe2141ef20abd098927adc66d6728821cb34f59",
+            "refs/heads/master",
+        )
+        .unwrap(),
     )
     .unwrap();
     assert!(result.is_err());
@@ -222,9 +250,12 @@ fn verify_git_commits_code_injected_into_unsigned_merge() {
         &LiveGit::default("./").unwrap(),
         MockGpg,
         &verify_commits_config(),
-        "eb5e0185546b0bb1a13feec6b9ee8b39985fea42",
-        "eef93e7f977c125f92fc78116fc9b881e4055ae8",
-        "refs/heads/master",
+        &ReferenceUpdate::from_git_hook_format(
+            "eb5e0185546b0bb1a13feec6b9ee8b39985fea42",
+            "eef93e7f977c125f92fc78116fc9b881e4055ae8",
+            "refs/heads/master",
+        )
+        .unwrap(),
     )
     .unwrap();
     assert!(result.is_err());
@@ -238,9 +269,12 @@ fn verify_git_commits_happy_path_pushing_previously_checked_merge_commit() {
         &LiveGit::default("./").unwrap(),
         MockGpg,
         &verify_commits_config(),
-        "3eb315d10e2ad89555d7bfc78a1db1ce07bce434",
-        "3eb315d10e2ad89555d7bfc78a1db1ce07bce434",
-        "refs/heads/master",
+        &ReferenceUpdate::from_git_hook_format(
+            "3eb315d10e2ad89555d7bfc78a1db1ce07bce434",
+            "3eb315d10e2ad89555d7bfc78a1db1ce07bce434",
+            "refs/heads/master",
+        )
+        .unwrap(),
     )
     .unwrap();
     assert!(result.is_ok(), "Error: {:?}", result);
@@ -253,9 +287,12 @@ fn verify_git_commits_author_merged_own_code_not_on_head() {
         &LiveGit::default("./").unwrap(),
         MockGpg,
         &verify_commits_config(),
-        "eb5e0185546b0bb1a13feec6b9ee8b39985fea42",
-        "6004dfdb071c71e5e76ad55b924b576487e1c485",
-        "refs/heads/valid-branch",
+        &ReferenceUpdate::from_git_hook_format(
+            "eb5e0185546b0bb1a13feec6b9ee8b39985fea42",
+            "6004dfdb071c71e5e76ad55b924b576487e1c485",
+            "refs/heads/valid-branch",
+        )
+        .unwrap(),
     )
     .unwrap();
     assert!(result.is_ok(), "Error: {:?}", result);
@@ -274,9 +311,12 @@ fn verify_git_commits_author_merged_own_code_on_configured_mainline() {
         .unwrap(),
         MockGpg,
         &verify_commits_config(),
-        "eb5e0185546b0bb1a13feec6b9ee8b39985fea42",
-        "6004dfdb071c71e5e76ad55b924b576487e1c485",
-        "refs/heads/master",
+        &ReferenceUpdate::from_git_hook_format(
+            "eb5e0185546b0bb1a13feec6b9ee8b39985fea42",
+            "6004dfdb071c71e5e76ad55b924b576487e1c485",
+            "refs/heads/master",
+        )
+        .unwrap(),
     )
     .unwrap();
     assert!(result.is_err());
@@ -295,9 +335,12 @@ fn verify_git_commits_author_trivial_merge_between_mainlines() {
         .unwrap(),
         MockGpg,
         &verify_commits_config(),
-        "eb5e0185546b0bb1a13feec6b9ee8b39985fea42",
-        "6004dfdb071c71e5e76ad55b924b576487e1c485",
-        "refs/heads/valid-branch",
+        &ReferenceUpdate::from_git_hook_format(
+            "eb5e0185546b0bb1a13feec6b9ee8b39985fea42",
+            "6004dfdb071c71e5e76ad55b924b576487e1c485",
+            "refs/heads/valid-branch",
+        )
+        .unwrap(),
     )
     .unwrap();
     assert!(result.is_ok(), "Error: {:?}", result);
@@ -310,9 +353,12 @@ fn verify_git_commits_author_merged_own_code_on_head() {
         &LiveGit::default("./").unwrap(),
         MockGpg,
         &verify_commits_config(),
-        "eb5e0185546b0bb1a13feec6b9ee8b39985fea42",
-        "6004dfdb071c71e5e76ad55b924b576487e1c485",
-        "refs/heads/master",
+        &ReferenceUpdate::from_git_hook_format(
+            "eb5e0185546b0bb1a13feec6b9ee8b39985fea42",
+            "6004dfdb071c71e5e76ad55b924b576487e1c485",
+            "refs/heads/master",
+        )
+        .unwrap(),
     )
     .unwrap();
     assert!(result.is_err());
@@ -325,9 +371,12 @@ fn verify_git_commits_author_merged_own_code_on_head_with_tag() {
         &LiveGit::default("./").unwrap(),
         MockGpg,
         &verify_commits_config(),
-        "eb5e0185546b0bb1a13feec6b9ee8b39985fea42",
-        "e5924d0748c8852d74049679b34ca4b3b0570d0d",
-        "refs/heads/master",
+        &ReferenceUpdate::from_git_hook_format(
+            "eb5e0185546b0bb1a13feec6b9ee8b39985fea42",
+            "e5924d0748c8852d74049679b34ca4b3b0570d0d",
+            "refs/heads/master",
+        )
+        .unwrap(),
     )
     .unwrap();
     assert!(result.is_ok());
@@ -340,9 +389,12 @@ fn verify_tagged_git_commits_override_rules() {
         &LiveGit::default("./").unwrap(),
         MockGpg,
         &verify_commits_config(),
-        "7f9763e189ade34345e683ab7e0c22d164280452",
-        "6f00838625cd1b7dc0acc66e43fee5594f0f124c",
-        "refs/heads/master",
+        &ReferenceUpdate::from_git_hook_format(
+            "7f9763e189ade34345e683ab7e0c22d164280452",
+            "6f00838625cd1b7dc0acc66e43fee5594f0f124c",
+            "refs/heads/master",
+        )
+        .unwrap(),
     )
     .unwrap();
     assert!(result.is_ok(), "Error: {:?}", result);
@@ -358,9 +410,12 @@ fn verify_tagged_git_commits_not_overridden_if_not_enough_tags() {
             override_tags_required: 2,
             ..verify_commits_config()
         },
-        "7f9763e189ade34345e683ab7e0c22d164280452",
-        "6f00838625cd1b7dc0acc66e43fee5594f0f124c",
-        "refs/heads/master",
+        &ReferenceUpdate::from_git_hook_format(
+            "7f9763e189ade34345e683ab7e0c22d164280452",
+            "6f00838625cd1b7dc0acc66e43fee5594f0f124c",
+            "refs/heads/master",
+        )
+        .unwrap(),
     )
     .unwrap();
     assert!(result.is_err());
@@ -376,9 +431,12 @@ fn verify_unrebased_branch_is_allowed_if_not_required() {
             verify_rebased: false,
             ..verify_commits_config()
         },
-        "eb5e0185546b0bb1a13feec6b9ee8b39985fea42",
-        "6eea56095f7498043f1d3d74bad46056b92675ea",
-        "refs/heads/master",
+        &ReferenceUpdate::from_git_hook_format(
+            "eb5e0185546b0bb1a13feec6b9ee8b39985fea42",
+            "6eea56095f7498043f1d3d74bad46056b92675ea",
+            "refs/heads/master",
+        )
+        .unwrap(),
     )
     .unwrap();
     assert!(result.is_ok(), "Error: {:?}", result);
@@ -394,9 +452,12 @@ fn verify_unrebased_branch_is_blocked_if_required() {
             verify_rebased: true,
             ..verify_commits_config()
         },
-        "eb5e0185546b0bb1a13feec6b9ee8b39985fea42",
-        "6eea56095f7498043f1d3d74bad46056b92675ea",
-        "refs/heads/master",
+        &ReferenceUpdate::from_git_hook_format(
+            "eb5e0185546b0bb1a13feec6b9ee8b39985fea42",
+            "6eea56095f7498043f1d3d74bad46056b92675ea",
+            "refs/heads/master",
+        )
+        .unwrap(),
     )
     .unwrap();
     assert!(result.is_err());
@@ -412,9 +473,12 @@ fn verify_rebased_branch_is_allowed_when_required() {
             verify_rebased: true,
             ..verify_commits_config()
         },
-        "eb5e0185546b0bb1a13feec6b9ee8b39985fea42",
-        "3eb315d10e2ad89555d7bfc78a1db1ce07bce434",
-        "refs/heads/master",
+        &ReferenceUpdate::from_git_hook_format(
+            "eb5e0185546b0bb1a13feec6b9ee8b39985fea42",
+            "3eb315d10e2ad89555d7bfc78a1db1ce07bce434",
+            "refs/heads/master",
+        )
+        .unwrap(),
     )
     .unwrap();
     assert!(result.is_ok(), "Error: {:?}", result);
@@ -430,9 +494,12 @@ fn verify_unrebased_branch_is_blocked_when_mainline_has_reverts() {
             verify_rebased: true,
             ..verify_commits_config()
         },
-        "3f48e07e5f8d5ab932a0a298ba3dd52809eef6d2",
-        "3911fdcbba1621d39096cef1bddbf4b35be2aeb6",
-        "refs/heads/master",
+        &ReferenceUpdate::from_git_hook_format(
+            "3f48e07e5f8d5ab932a0a298ba3dd52809eef6d2",
+            "3911fdcbba1621d39096cef1bddbf4b35be2aeb6",
+            "refs/heads/master",
+        )
+        .unwrap(),
     )
     .unwrap();
     assert!(result.is_err());
@@ -448,9 +515,12 @@ fn verify_rebased_branch_is_allowed_when_a_force_push_has_occurred() {
             verify_rebased: true,
             ..verify_commits_config()
         },
-        "eb5e0185546b0bb1a13feec6b9ee8b39985fea42",
-        "02bb68e637bda7667428f8fb3b709be5720fe76a",
-        "refs/heads/master",
+        &ReferenceUpdate::from_git_hook_format(
+            "eb5e0185546b0bb1a13feec6b9ee8b39985fea42",
+            "02bb68e637bda7667428f8fb3b709be5720fe76a",
+            "refs/heads/master",
+        )
+        .unwrap(),
     )
     .unwrap();
     assert!(result.is_ok(), "Error: {:?}", result);
