@@ -1,14 +1,13 @@
 pub mod policy_result;
-pub mod reference_update;
 
 use crate::config::VerifyGitCommitsConfig;
 use crate::fs::*;
 use crate::git::*;
 use crate::gpg::*;
 use crate::keyring::*;
+use crate::reference_update::ReferenceUpdate;
 
 use self::policy_result::PolicyResult;
-use self::reference_update::ReferenceUpdate;
 
 use git2::Oid;
 use rayon::prelude::*;

@@ -1,7 +1,7 @@
 use capn;
 use capn::config::{Config, GitConfig, VerifyGitCommitsConfig};
 use capn::policies;
-use capn::policies::reference_update::ReferenceUpdate;
+use capn::reference_update::ReferenceUpdate;
 
 use capn::git::LiveGit;
 use capn::gpg::test::MockGpg;

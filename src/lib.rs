@@ -12,7 +12,8 @@ use crate::config::Config;
 use crate::fs::Fs;
 use crate::git::Git;
 use crate::gpg::Gpg;
-use crate::policies::{policy_result::PolicyResult, reference_update::ReferenceUpdate, *};
+use crate::policies::{policy_result::PolicyResult, *};
+use crate::reference_update::ReferenceUpdate;
 
 pub mod config;
 pub mod error;
@@ -22,6 +23,7 @@ pub mod gpg;
 pub mod keyring;
 pub mod logger;
 pub mod policies;
+pub mod reference_update;
 
 #[derive(Debug, StructOpt)]
 pub struct PrepareCommitMsg {
