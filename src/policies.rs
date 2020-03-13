@@ -1,4 +1,6 @@
 pub mod policy_result;
+pub mod reference_update;
+
 use crate::config::VerifyGitCommitsConfig;
 use crate::fs::*;
 use crate::git::*;
@@ -6,6 +8,8 @@ use crate::gpg::*;
 use crate::keyring::*;
 
 use self::policy_result::PolicyResult;
+use self::reference_update::ReferenceUpdate;
+
 use git2::Oid;
 use rayon::prelude::*;
 use std::collections::HashSet;
@@ -36,22 +40,16 @@ pub fn verify_git_commits<G: Git, P: Gpg>(
 ) -> Result<PolicyResult, Box<dyn Error>> {
     info!("Executing policy: verify_git_commits");
     let start = Instant::now();
-    let old_commit_id = Oid::from_str(old_value)?;
-    let new_commit_id = Oid::from_str(new_value)?;
+    let ref_update = ReferenceUpdate::from_git_hook_format(old_value, new_value, ref_name)?;
 
     let mut policy_result = PolicyResult::Ok;
 
-    if new_commit_id.is_zero() {
+    if let ReferenceUpdate::Delete { .. } = ref_update {
         debug!("Delete branch detected, no commits to verify.")
-    } else if git.is_tag(new_commit_id) {
+    } else if git.is_tag(ref_update.ref_name())? {
         debug!("Tag detected, no commits to verify.")
     } else {
-        let all_commits = commits_to_verify(
-            git,
-            old_commit_id,
-            new_commit_id,
-            &config.override_tag_pattern,
-        )?;
+        let all_commits = commits_to_verify(git, &ref_update, &config.override_tag_pattern)?;
 
         debug!("Number of commits to verify {} : ", all_commits.len());
         for commit in &all_commits {
@@ -70,8 +68,7 @@ pub fn verify_git_commits<G: Git, P: Gpg>(
         )?;
         let not_manually_verified_commits = commits_to_verify_excluding_manually_verified(
             git,
-            old_commit_id,
-            new_commit_id,
+            &ref_update,
             manually_verified_commmits,
             &config.override_tag_pattern,
         )?;
@@ -97,9 +94,7 @@ pub fn verify_git_commits<G: Git, P: Gpg>(
             policy_result = policy_result.and(verify_different_authors::<G>(
                 &all_commits,
                 git,
-                old_commit_id,
-                new_commit_id,
-                ref_name,
+                &ref_update,
             )?);
         }
 
@@ -107,9 +102,7 @@ pub fn verify_git_commits<G: Git, P: Gpg>(
             policy_result = policy_result.and(verify_rebased::<G>(
                 &all_commits,
                 git,
-                old_commit_id,
-                new_commit_id,
-                ref_name,
+                &ref_update,
                 &config.override_tag_pattern,
             )?);
         }
@@ -125,23 +118,26 @@ pub fn verify_git_commits<G: Git, P: Gpg>(
 
 fn commits_to_verify<G: Git>(
     git: &G,
-    old_commit_id: Oid,
-    new_commit_id: Oid,
+    ref_update: &ReferenceUpdate,
     override_tag_pattern: &Option<String>,
 ) -> Result<Vec<Commit>, Box<dyn Error>> {
-    git.find_new_commits(&[old_commit_id], &[new_commit_id], override_tag_pattern)
+    let to_exclude = ref_update.old_commit_id().into_iter().collect::<Vec<_>>();
+    let to_include = ref_update.new_commit_id().into_iter().collect::<Vec<_>>();
+    git.find_new_commits(&to_exclude, &to_include, override_tag_pattern)
 }
 
 fn commits_to_verify_excluding_manually_verified<G: Git>(
     git: &G,
-    old_commit_id: Oid,
-    new_commit_id: Oid,
+    ref_update: &ReferenceUpdate,
     manually_verified: Vec<Oid>,
     override_tag_pattern: &Option<String>,
 ) -> Result<Vec<Commit>, Box<dyn Error>> {
     let mut to_exclude = manually_verified;
-    to_exclude.push(old_commit_id);
-    git.find_new_commits(&to_exclude, &[new_commit_id], override_tag_pattern)
+    if let Some(old_commit_id) = ref_update.old_commit_id() {
+        to_exclude.push(old_commit_id);
+    }
+    let to_include = ref_update.new_commit_id().into_iter().collect::<Vec<_>>();
+    git.find_new_commits(&to_exclude, &to_include, override_tag_pattern)
 }
 
 fn find_and_verify_override_tags<G: Git, P: Gpg>(
@@ -259,54 +255,64 @@ fn verify_commit_signatures<G: Git, P: Gpg>(
 fn verify_different_authors<G: Git>(
     commits: &[Commit],
     git: &G,
-    old_commit_id: Oid,
-    new_commit_id: Oid,
-    ref_name: &str,
+    ref_update: &ReferenceUpdate,
 ) -> Result<PolicyResult, Box<dyn Error>> {
-    let new_branch = old_commit_id.is_zero();
-    let is_merge = git.is_merge_commit(new_commit_id);
-    let is_mainline = git.is_mainline(ref_name)?;
+    match ref_update {
+        ReferenceUpdate::Delete { .. } => {
+            info!("Multiple author verification passed: No checks required for deleting a branch");
+            Ok(PolicyResult::Ok)
+        }
+        ReferenceUpdate::New { new_commit_id, .. } => {
+            info!("Multiple author verification passed for {}: New branch does not require multiple authors for a merge commit", new_commit_id);
+            Ok(PolicyResult::Ok)
+        }
+        ReferenceUpdate::Update {
+            new_commit_id,
+            ref_name,
+            ..
+        } => {
+            let is_merge = git.is_merge_commit(*new_commit_id);
+            let is_mainline = git.is_mainline(ref_name)?;
 
-    if !is_mainline {
-        info!("Multiple author verification passed for {}: Not updating a mainline branch, does not require multiple authors", new_commit_id);
-        Ok(PolicyResult::Ok)
-    } else if !is_merge {
-        info!("Multiple author verification passed for {}: Not a merge commit, does not require multiple authors", new_commit_id);
-        Ok(PolicyResult::Ok)
-    } else if new_branch {
-        info!("Multiple author verification passed for {}: New branch does not require multiple authors for a merge commit", new_commit_id);
-        Ok(PolicyResult::Ok)
-    } else if commits.len() == 0 {
-        info!("Multiple author verification passed for {}: No new commits pushed, does not require multiple authors", new_commit_id);
-        Ok(PolicyResult::Ok)
-    } else if commits.len() == 1 && commits[0].is_identical_tree_to_any_parent {
-        info!("Multiple author verification passed for {}: There is only one commit and it has an identical filetree to one of its parents", new_commit_id);
-        Ok(PolicyResult::Ok)
-    } else if commits.len() == 1 && git.is_trivial_merge_commit(&commits[0])? {
-        info!("Multiple author verification passed for {}: There is only one commit and it is a trivial merge between mainline branches", new_commit_id);
-        Ok(PolicyResult::Ok)
-    } else {
-        let authors: HashSet<_> = commits
-            .iter()
-            .flat_map(|c| {
-                c.tags
+            if !is_mainline {
+                info!("Multiple author verification passed for {}: Not updating a mainline branch, does not require multiple authors", new_commit_id);
+                Ok(PolicyResult::Ok)
+            } else if !is_merge {
+                info!("Multiple author verification passed for {}: Not a merge commit, does not require multiple authors", new_commit_id);
+                Ok(PolicyResult::Ok)
+            } else if commits.len() == 0 {
+                info!("Multiple author verification passed for {}: No new commits pushed, does not require multiple authors", new_commit_id);
+                Ok(PolicyResult::Ok)
+            } else if commits.len() == 1 && commits[0].is_identical_tree_to_any_parent {
+                info!("Multiple author verification passed for {}: There is only one commit and it has an identical filetree to one of its parents", new_commit_id);
+                Ok(PolicyResult::Ok)
+            } else if commits.len() == 1 && git.is_trivial_merge_commit(&commits[0])? {
+                info!("Multiple author verification passed for {}: There is only one commit and it is a trivial merge between mainline branches", new_commit_id);
+                Ok(PolicyResult::Ok)
+            } else {
+                let authors: HashSet<_> = commits
                     .iter()
-                    .filter_map(|t| t.tagger_email.as_ref())
-                    .chain(c.author_email.as_ref())
-            })
-            .collect();
-        if authors.len() <= 1 {
-            error!(
+                    .flat_map(|c| {
+                        c.tags
+                            .iter()
+                            .filter_map(|t| t.tagger_email.as_ref())
+                            .chain(c.author_email.as_ref())
+                    })
+                    .collect();
+                if authors.len() <= 1 {
+                    error!(
                 "Multiple author verification failed for {}: requires multiple authors, found {:?}",
                 new_commit_id, authors
             );
-            Ok(PolicyResult::NotEnoughAuthors(new_commit_id))
-        } else {
-            info!(
-                "Multiple author verification passed for {}: found multiple authors, {:?}",
-                new_commit_id, authors
-            );
-            Ok(PolicyResult::Ok)
+                    Ok(PolicyResult::NotEnoughAuthors(*new_commit_id))
+                } else {
+                    info!(
+                        "Multiple author verification passed for {}: found multiple authors, {:?}",
+                        new_commit_id, authors
+                    );
+                    Ok(PolicyResult::Ok)
+                }
+            }
         }
     }
 }
@@ -314,66 +320,76 @@ fn verify_different_authors<G: Git>(
 fn verify_rebased<G: Git>(
     commits: &[Commit],
     git: &G,
-    old_commit_id: Oid,
-    new_commit_id: Oid,
-    ref_name: &str,
+    ref_update: &ReferenceUpdate,
     override_tag_pattern: &Option<String>,
 ) -> Result<PolicyResult, Box<dyn Error>> {
-    let new_branch = old_commit_id.is_zero();
-    let is_merge = git.is_merge_commit(new_commit_id);
-    let is_mainline = git.is_mainline(ref_name)?;
-    let new_commit = git.find_commit(new_commit_id, override_tag_pattern)?;
-    let is_not_fast_forward = !git.is_descendent_of(new_commit_id, old_commit_id)?;
+    match ref_update {
+        ReferenceUpdate::Delete { .. } => {
+            info!("Rebase verification passed: No checks required for deleting a branch");
+            Ok(PolicyResult::Ok)
+        }
+        ReferenceUpdate::New { new_commit_id, .. } => {
+            info!("Rebase verification passed for {}: New branch does not require being rebased for a merge commit", new_commit_id);
+            Ok(PolicyResult::Ok)
+        }
+        ReferenceUpdate::Update {
+            old_commit_id,
+            new_commit_id,
+            ref_name,
+        } => {
+            let is_merge = git.is_merge_commit(*new_commit_id);
+            let is_mainline = git.is_mainline(ref_name)?;
+            let new_commit = git.find_commit(*new_commit_id, override_tag_pattern)?;
+            let is_not_fast_forward = !git.is_descendent_of(*new_commit_id, *old_commit_id)?;
 
-    if !is_mainline {
-        info!(
-            "Rebase verification passed for {}: Not updating a mainline branch",
-            new_commit_id
-        );
-        Ok(PolicyResult::Ok)
-    } else if !is_merge {
-        info!(
-            "Rebase verification passed for {}: Not a merge commit",
-            new_commit_id
-        );
-        Ok(PolicyResult::Ok)
-    } else if new_branch {
-        info!("Rebase verification passed for {}: New branch does not require being rebased for a merge commit", new_commit_id);
-        Ok(PolicyResult::Ok)
-    } else if commits.len() == 0 {
-        info!(
-            "Rebase verification passed for {}: No new commits pushed",
-            new_commit_id
-        );
-        Ok(PolicyResult::Ok)
-    } else if is_not_fast_forward {
-        info!(
+            if !is_mainline {
+                info!(
+                    "Rebase verification passed for {}: Not updating a mainline branch",
+                    new_commit_id
+                );
+                Ok(PolicyResult::Ok)
+            } else if !is_merge {
+                info!(
+                    "Rebase verification passed for {}: Not a merge commit",
+                    new_commit_id
+                );
+                Ok(PolicyResult::Ok)
+            } else if commits.len() == 0 {
+                info!(
+                    "Rebase verification passed for {}: No new commits pushed",
+                    new_commit_id
+                );
+                Ok(PolicyResult::Ok)
+            } else if is_not_fast_forward {
+                info!(
             "Rebase verification passed for {0}: Commit Id {0} is not a descendent of Commit Id {1}, it is most likely that a force-push has occurred",
             new_commit_id,
             old_commit_id
         );
-        Ok(PolicyResult::Ok)
-    } else {
-        let new_commit_is_rebased = new_commit
-            .parents
-            .iter()
-            .map(|parent_id| {
-                git.is_descendent_of(*parent_id, old_commit_id)
-                    .map(|is_descendent| is_descendent || *parent_id == old_commit_id)
-            })
-            .collect::<Result<Vec<bool>, _>>()?
-            .iter()
-            .all(|x| *x);
+                Ok(PolicyResult::Ok)
+            } else {
+                let new_commit_is_rebased = new_commit
+                    .parents
+                    .iter()
+                    .map(|parent_id| {
+                        git.is_descendent_of(*parent_id, *old_commit_id)
+                            .map(|is_descendent| is_descendent || *parent_id == *old_commit_id)
+                    })
+                    .collect::<Result<Vec<bool>, _>>()?
+                    .iter()
+                    .all(|x| *x);
 
-        if new_commit_is_rebased {
-            info!(
+                if new_commit_is_rebased {
+                    info!(
                 "Rebase verification passed for {}: Branch is up to date with the mainline it's being merged into",
                 new_commit_id
             );
-            Ok(PolicyResult::Ok)
-        } else {
-            error!("Rebase verification failed for {}: branch must be rebased before it can be merged into the mainline", new_commit_id);
-            Ok(PolicyResult::NotRebased(new_commit_id))
+                    Ok(PolicyResult::Ok)
+                } else {
+                    error!("Rebase verification failed for {}: branch must be rebased before it can be merged into the mainline", new_commit_id);
+                    Ok(PolicyResult::NotRebased(*new_commit_id))
+                }
+            }
         }
     }
 }

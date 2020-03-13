@@ -41,7 +41,7 @@ pub trait Git: Sized {
         contents: &str,
     ) -> Result<(), Box<dyn Error>>;
     fn current_branch(&self) -> Result<String, Box<dyn Error>>;
-    fn is_tag(&self, id: Oid) -> bool;
+    fn is_tag(&self, ref_name: &str) -> Result<bool, Box<dyn Error>>;
     fn find_commit(
         &self,
         commit_id: Oid,
@@ -387,11 +387,9 @@ impl Git for LiveGit {
             })
     }
 
-    fn is_tag(&self, id: Oid) -> bool {
-        match self.repo.find_tag(id) {
-            Ok(_) => true,
-            _ => false,
-        }
+    fn is_tag(&self, ref_name: &str) -> Result<bool, Box<dyn Error>> {
+        let reference = self.repo.find_reference(ref_name)?;
+        Ok(reference.is_tag())
     }
 
     fn is_descendent_of(&self, commit: Oid, ancestor: Oid) -> Result<bool, Box<dyn Error>> {
