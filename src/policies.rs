@@ -357,28 +357,24 @@ fn verify_rebased<G: Git>(
                 Ok(PolicyResult::Ok)
             } else if !git.is_descendent_of(*new_commit_id, *old_commit_id)? {
                 info!(
-            "Rebase verification passed for {0}: Commit Id {0} is not a descendent of Commit Id {1}, it is most likely that a force-push has occurred",
-            new_commit_id,
-            old_commit_id
-        );
+                    "Rebase verification passed for {0}: Commit Id {0} is not a descendent of Commit Id {1}, it is most likely that a force-push has occurred",
+                    new_commit_id,
+                    old_commit_id
+                );
                 Ok(PolicyResult::Ok)
             } else {
-                let new_commit_is_rebased = new_commit
-                    .parents
-                    .iter()
-                    .map(|parent_id| {
-                        git.is_descendent_of(*parent_id, *old_commit_id)
-                            .map(|is_descendent| is_descendent || *parent_id == *old_commit_id)
-                    })
-                    .collect::<Result<Vec<bool>, _>>()?
-                    .iter()
-                    .all(|x| *x);
+                let mut new_commit_is_rebased = true;
+                for parent_id in &new_commit.parents {
+                    let parent_is_descendent_of_old_id = parent_id == old_commit_id
+                        || git.is_descendent_of(*parent_id, *old_commit_id)?;
+                    new_commit_is_rebased = new_commit_is_rebased && parent_is_descendent_of_old_id;
+                }
 
                 if new_commit_is_rebased {
                     info!(
-                "Rebase verification passed for {}: Branch is up to date with the mainline it's being merged into",
-                new_commit_id
-            );
+                        "Rebase verification passed for {}: Branch is up to date with the mainline it's being merged into",
+                        new_commit_id
+                    );
                     Ok(PolicyResult::Ok)
                 } else {
                     error!("Rebase verification failed for {}: branch must be rebased before it can be merged into the mainline", new_commit_id);
