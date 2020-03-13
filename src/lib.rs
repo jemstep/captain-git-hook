@@ -12,7 +12,7 @@ use crate::config::Config;
 use crate::fs::Fs;
 use crate::git::Git;
 use crate::gpg::Gpg;
-use crate::policies::*;
+use crate::policies::{policy_result::PolicyResult, *};
 
 pub mod config;
 pub mod error;
