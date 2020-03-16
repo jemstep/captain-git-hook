@@ -12,7 +12,8 @@ use crate::config::Config;
 use crate::fs::Fs;
 use crate::git::Git;
 use crate::gpg::Gpg;
-use crate::policies::*;
+use crate::policies::{policy_result::PolicyResult, *};
+use crate::reference_update::ReferenceUpdate;
 
 pub mod config;
 pub mod error;
@@ -22,6 +23,7 @@ pub mod gpg;
 pub mod keyring;
 pub mod logger;
 pub mod policies;
+pub mod reference_update;
 
 #[derive(Debug, StructOpt)]
 pub struct PrepareCommitMsg {
@@ -76,10 +78,12 @@ pub fn pre_push<G: Git, P: Gpg>(
     _remote_ref: &str,
     remote_sha: &str,
 ) -> Result<PolicyResult, Box<dyn Error>> {
+    let ref_update = ReferenceUpdate::from_git_hook_format(remote_sha, local_sha, local_ref)?;
+
     vec![config
         .verify_git_commits
         .as_ref()
-        .map(|c| verify_git_commits::<G, P>(git, gpg, c, remote_sha, local_sha, local_ref))]
+        .map(|c| verify_git_commits::<G, P>(git, gpg, c, &ref_update))]
     .into_iter()
     .flatten()
     .collect()
@@ -93,10 +97,12 @@ pub fn pre_receive<G: Git, P: Gpg>(
     new_value: &str,
     ref_name: &str,
 ) -> Result<PolicyResult, Box<dyn Error>> {
+    let ref_update = ReferenceUpdate::from_git_hook_format(old_value, new_value, ref_name)?;
+
     vec![config
         .verify_git_commits
         .as_ref()
-        .map(|c| verify_git_commits::<G, P>(git, gpg, c, old_value, new_value, ref_name))]
+        .map(|c| verify_git_commits::<G, P>(git, gpg, c, &ref_update))]
     .into_iter()
     .flatten()
     .collect()

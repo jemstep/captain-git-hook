@@ -2,9 +2,13 @@
 afe2141ef20abd098927adc66d6728821cb34f59 refs/heads/invalid-author
 eef93e7f977c125f92fc78116fc9b881e4055ae8 refs/heads/invalid-merge-with-additions
 eb5e0185546b0bb1a13feec6b9ee8b39985fea42 refs/heads/master
+3f48e07e5f8d5ab932a0a298ba3dd52809eef6d2 refs/heads/master-with-revert
+3911fdcbba1621d39096cef1bddbf4b35be2aeb6 refs/heads/merged-with-unrebased-branch
 e5924d0748c8852d74049679b34ca4b3b0570d0d refs/heads/multiple-author-in-tag-trunk
 6004dfdb071c71e5e76ad55b924b576487e1c485 refs/heads/same-author
 6f00838625cd1b7dc0acc66e43fee5594f0f124c refs/heads/tagged-branch
+318fae0d25bceeb2c5d19a966c4de4c2d9fceae2 refs/heads/unrebased
+6eea56095f7498043f1d3d74bad46056b92675ea refs/heads/unrebased-merge
 d2e3bfdc923986d04e7a6368b5fdd78b1ddf84f1 refs/heads/unsigned
 e9752e78505f3c9bcec15d4bef4299caf0538388 refs/heads/unsigned-buried-behind-merge
 6754e4ec9b2dec567190d5a7f0be18b1a23d632a refs/heads/valid-automerge-commit

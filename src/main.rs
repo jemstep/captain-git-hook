@@ -8,7 +8,7 @@ use capn::git::{Git, LiveGit};
 use capn::gpg::{Gpg, LiveGpg};
 use capn::logger;
 use capn::logger::{Logger, LoggingOpt};
-use capn::policies::PolicyResult;
+use capn::policies::policy_result::PolicyResult;
 use capn::*;
 
 use log::*;

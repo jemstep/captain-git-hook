@@ -7,8 +7,10 @@ pub struct CapnError {
 }
 
 impl CapnError {
-    pub fn new(reason: String) -> CapnError {
-        CapnError { reason }
+    pub fn new(reason: impl Into<String>) -> CapnError {
+        CapnError {
+            reason: reason.into(),
+        }
     }
 }
 
