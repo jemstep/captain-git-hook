@@ -1,7 +1,7 @@
 use crate::error::CapnError;
 use crate::keyring::Keyring;
 use git2;
-use git2::{ErrorClass, ObjectType, Oid, Repository};
+use git2::{ErrorClass, ErrorCode, ObjectType, Oid, Repository};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::error::Error;
@@ -388,8 +388,11 @@ impl Git for LiveGit {
     }
 
     fn is_tag(&self, ref_name: &str) -> Result<bool, Box<dyn Error>> {
-        let reference = self.repo.find_reference(ref_name)?;
-        Ok(reference.is_tag())
+        match self.repo.find_reference(ref_name) {
+            Ok(reference) => Ok(reference.is_tag()),
+            Err(err) if err.code() == ErrorCode::NotFound => Ok(ref_name.starts_with("refs/tags")),
+            Err(e) => Err(e.into()),
+        }
     }
 
     fn is_descendent_of(&self, commit: Oid, ancestor: Oid) -> Result<bool, Box<dyn Error>> {
@@ -592,6 +595,50 @@ mod test {
                 &None,
             )
             .unwrap();
+        }
+    }
+
+    mod is_tag {
+        use super::super::*;
+
+        #[test]
+        fn identifies_existing_branch_as_not_a_tag() {
+            let project_root = env!("CARGO_MANIFEST_DIR");
+            let git = LiveGit::default(format!("{}/tests/test-repo.git", project_root)).unwrap();
+            assert_eq!(git.is_tag("refs/heads/master").ok(), Some(false));
+        }
+        #[test]
+        fn identifies_new_branch_as_not_a_tag() {
+            let project_root = env!("CARGO_MANIFEST_DIR");
+            let git = LiveGit::default(format!("{}/tests/test-repo.git", project_root)).unwrap();
+            assert_eq!(
+                git.is_tag("refs/heads/new-brach-that-does-not-exist").ok(),
+                Some(false)
+            );
+        }
+        #[test]
+        fn identifies_existing_lightweight_tag_as_a_tag() {
+            let project_root = env!("CARGO_MANIFEST_DIR");
+            let git = LiveGit::default(format!("{}/tests/test-repo.git", project_root)).unwrap();
+            assert_eq!(git.is_tag("refs/tags/lightweight-tag").ok(), Some(true));
+        }
+        #[test]
+        fn identifies_existing_annotated_tag_as_a_tag() {
+            let project_root = env!("CARGO_MANIFEST_DIR");
+            let git = LiveGit::default(format!("{}/tests/test-repo.git", project_root)).unwrap();
+            assert_eq!(
+                git.is_tag("refs/tags/capn-override-test-user-1").ok(),
+                Some(true)
+            );
+        }
+        #[test]
+        fn identifies_new_tag_as_a_tag() {
+            let project_root = env!("CARGO_MANIFEST_DIR");
+            let git = LiveGit::default(format!("{}/tests/test-repo.git", project_root)).unwrap();
+            assert_eq!(
+                git.is_tag("refs/tags/new-tag-that-does-not-exist").ok(),
+                Some(true)
+            );
         }
     }
 
