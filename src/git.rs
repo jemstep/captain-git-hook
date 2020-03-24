@@ -336,16 +336,18 @@ impl Git for LiveGit {
         verification_commit: &Commit,
     ) -> Result<bool, Box<dyn Error>> {
         use git2::MergeOptions;
-        let commit = self.repo.find_commit(verification_commit.id)?;
+        let temp_repo = TempRepo::new(&self.repo, verification_commit.id)?;
+        let commit = temp_repo.repo.find_commit(verification_commit.id)?;
+        let parents = commit.parents().collect::<Vec<_>>();
 
-        let temp_repo = TempRepo::new(commit.id())?;
-        match &commit.parents().collect::<Vec<_>>()[..] {
+        match &parents[..] {
             [a, b] => {
                 let expected_tree_id = commit.tree_id();
-                let reproduced_tree_id = self
+                let reproduced_tree_id = temp_repo
                     .repo
                     .merge_commits(&a, &b, Some(MergeOptions::new().fail_on_conflict(true)))
                     .and_then(|mut index| index.write_tree_to(&temp_repo.repo));
+                trace!("Checking for a trivial merge commit, expecting tree_id of {}, result of reproducing tree is {:?}", expected_tree_id, reproduced_tree_id);
                 let matches = reproduced_tree_id
                     .as_ref()
                     .map(|id| *id == expected_tree_id)
@@ -468,7 +470,7 @@ struct TempRepo {
 }
 
 impl TempRepo {
-    fn new(commit_id: Oid) -> Result<TempRepo, Box<dyn Error>> {
+    fn new(src_repo: &Repository, commit_id: Oid) -> Result<TempRepo, Box<dyn Error>> {
         let max_attempts = 20;
         let tmp_dir = std::env::temp_dir();
 
@@ -482,8 +484,11 @@ impl TempRepo {
                         "Created temp repo for verification: {}",
                         tmp_repo_path.display()
                     );
+                    let src_path = src_repo.path().to_str().ok_or(Box::new(CapnError::new(
+                        "Path to the repo being verified was not valid UTF-8",
+                    )))?;
                     return Ok(TempRepo {
-                        repo: Repository::init_bare(&tmp_repo_path)?,
+                        repo: Repository::clone(src_path, &tmp_repo_path)?,
                     });
                 }
             };
