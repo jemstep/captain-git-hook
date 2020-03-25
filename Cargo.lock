@@ -45,7 +45,7 @@ dependencies = [
 
 [[package]]
 name = "capn"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "chrono 0.4.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "git2 0.13.0 (registry+https://github.com/rust-lang/crates.io-index)",
