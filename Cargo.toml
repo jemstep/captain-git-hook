@@ -20,4 +20,7 @@ quickcheck = "0.9.2"
 quickcheck_macros = "0.9.1"
 
 [profile.release]
+
+# Turns Link-Time Optimization up to the MAX! Results in slower
+# release build times, but faster and significantly smaller binaries.
 lto = true
