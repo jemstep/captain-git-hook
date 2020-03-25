@@ -475,7 +475,7 @@ impl LiveGit {
     ) -> Result<T, Box<dyn Error>> {
         let mut cache = self.temp_repo_clone.borrow_mut();
         if let Some(temp_repo) = cache.as_ref() {
-            return f(temp_repo);
+            f(temp_repo)
         } else {
             let temp_repo = TempRepo::new(&self.repo)?;
             let result = f(&temp_repo);
