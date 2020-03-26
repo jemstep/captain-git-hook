@@ -1,7 +1,7 @@
 use crate::error::CapnError;
 use crate::keyring::Keyring;
 use git2;
-use git2::{ErrorClass, ErrorCode, ObjectType, Oid, Repository};
+use git2::{build::RepoBuilder, ErrorClass, ErrorCode, ObjectType, Oid, Repository};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::error::Error;
@@ -10,6 +10,7 @@ use std::io::prelude::*;
 use std::path::Path;
 use std::process::*;
 use std::str;
+use uuid::Uuid;
 
 use crate::config::*;
 use log::*;
@@ -78,8 +79,9 @@ pub trait Git: Sized {
 
 pub struct LiveGit {
     repo: Repository,
-    tag_cache: RefCell<HashMap<Option<String>, HashMap<Oid, Vec<Tag>>>>,
     config: GitConfig,
+    tag_cache: RefCell<HashMap<Option<String>, HashMap<Oid, Vec<Tag>>>>,
+    temp_repo_clone: RefCell<Option<TempRepo>>,
 }
 
 impl Git for LiveGit {
@@ -336,25 +338,28 @@ impl Git for LiveGit {
         verification_commit: &Commit,
     ) -> Result<bool, Box<dyn Error>> {
         use git2::MergeOptions;
-        let commit = self.repo.find_commit(verification_commit.id)?;
 
-        let temp_repo = TempRepo::new(commit.id())?;
-        match &commit.parents().collect::<Vec<_>>()[..] {
-            [a, b] => {
-                let expected_tree_id = commit.tree_id();
-                let reproduced_tree_id = self
-                    .repo
-                    .merge_commits(&a, &b, Some(MergeOptions::new().fail_on_conflict(true)))
-                    .and_then(|mut index| index.write_tree_to(&temp_repo.repo));
-                let matches = reproduced_tree_id
-                    .as_ref()
-                    .map(|id| *id == expected_tree_id)
-                    .unwrap_or(false);
+        self.with_temp_repo_clone(|temp_repo| {
+            let commit = temp_repo.repo.find_commit(verification_commit.id)?;
+            let parents = commit.parents().collect::<Vec<_>>();
+            match &parents[..] {
+                [a, b] => {
+                    let expected_tree_id = commit.tree_id();
+                    let reproduced_tree_id = temp_repo
+                        .repo
+                        .merge_commits(&a, &b, Some(MergeOptions::new().fail_on_conflict(true)))
+                        .and_then(|mut index| index.write_tree_to(&temp_repo.repo));
+                    trace!("Checking for a trivial merge commit, expecting tree_id of {}, result of reproducing tree is {:?}", expected_tree_id, reproduced_tree_id);
+                    let matches = reproduced_tree_id
+                        .as_ref()
+                        .map(|id| *id == expected_tree_id)
+                        .unwrap_or(false);
 
-                Ok(matches)
+                    Ok(matches)
+                }
+                _ => Ok(false),
             }
-            _ => Ok(false),
-        }
+        })
     }
 
     fn is_mainline(&self, ref_name: &str) -> Result<bool, Box<dyn Error>> {
@@ -407,8 +412,9 @@ impl LiveGit {
         let repo = Repository::discover(path)?;
         Ok(LiveGit {
             repo,
-            tag_cache: RefCell::new(HashMap::new()),
             config: GitConfig::default(),
+            tag_cache: RefCell::new(HashMap::new()),
+            temp_repo_clone: RefCell::new(None),
         })
     }
 
@@ -416,8 +422,9 @@ impl LiveGit {
         let repo = Repository::discover(path)?;
         Ok(LiveGit {
             repo,
-            tag_cache: RefCell::new(HashMap::new()),
             config,
+            tag_cache: RefCell::new(HashMap::new()),
+            temp_repo_clone: RefCell::new(None),
         })
     }
 
@@ -461,6 +468,21 @@ impl LiveGit {
             .cloned()
             .unwrap_or(Vec::new())
     }
+
+    fn with_temp_repo_clone<T>(
+        &self,
+        f: impl Fn(&TempRepo) -> Result<T, Box<dyn Error>>,
+    ) -> Result<T, Box<dyn Error>> {
+        let mut cache = self.temp_repo_clone.borrow_mut();
+        if let Some(temp_repo) = cache.as_ref() {
+            f(temp_repo)
+        } else {
+            let temp_repo = TempRepo::new(&self.repo)?;
+            let result = f(&temp_repo);
+            *cache = Some(temp_repo);
+            result
+        }
+    }
 }
 
 struct TempRepo {
@@ -468,22 +490,28 @@ struct TempRepo {
 }
 
 impl TempRepo {
-    fn new(commit_id: Oid) -> Result<TempRepo, Box<dyn Error>> {
+    fn new(src_repo: &Repository) -> Result<TempRepo, Box<dyn Error>> {
         let max_attempts = 20;
         let tmp_dir = std::env::temp_dir();
 
-        for suffix in 0..max_attempts {
-            let tmp_repo_path = tmp_dir.join(format!("capn_tmp_{}_{}.git", commit_id, suffix));
+        for attempt in 1..=max_attempts {
+            let tmp_repo_path = tmp_dir.join(format!("capn_tmp_{}.git", Uuid::new_v4()));
             match std::fs::create_dir(&tmp_repo_path) {
                 Err(ref e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
                 Err(e) => return Err(Box::new(e)),
                 Ok(_) => {
                     trace!(
-                        "Created temp repo for verification: {}",
+                        "Created temp repo for verification after {} attempts: {}",
+                        attempt,
                         tmp_repo_path.display()
                     );
+                    let src_path = src_repo.path().to_str().ok_or(Box::new(CapnError::new(
+                        "Path to the repo being verified was not valid UTF-8",
+                    )))?;
                     return Ok(TempRepo {
-                        repo: Repository::init_bare(&tmp_repo_path)?,
+                        repo: RepoBuilder::new()
+                            .bare(true)
+                            .clone(src_path, &tmp_repo_path)?,
                     });
                 }
             };
