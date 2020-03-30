@@ -79,14 +79,9 @@ pub fn verify_git_commits<G: Git, P: Gpg>(
             })?;
         }
 
-        if config.verify_commit_signatures {
+        if config.verify_rebased {
             policy_result = policy_result.and_then(|| {
-                verify_commit_signatures::<G, P>(
-                    git,
-                    &gpg,
-                    &not_manually_verified_commits,
-                    &mut keyring,
-                )
+                verify_rebased::<G>(&all_commits, git, &ref_update, &config.override_tag_pattern)
             })?;
         }
 
@@ -95,9 +90,14 @@ pub fn verify_git_commits<G: Git, P: Gpg>(
                 .and_then(|| verify_different_authors::<G>(&all_commits, git, &ref_update))?;
         }
 
-        if config.verify_rebased {
+        if config.verify_commit_signatures {
             policy_result = policy_result.and_then(|| {
-                verify_rebased::<G>(&all_commits, git, &ref_update, &config.override_tag_pattern)
+                verify_commit_signatures::<G, P>(
+                    git,
+                    &gpg,
+                    &not_manually_verified_commits,
+                    &mut keyring,
+                )
             })?;
         }
     }
