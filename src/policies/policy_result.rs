@@ -1,4 +1,5 @@
 use git2::Oid;
+use std::error::Error;
 use std::fmt;
 use std::iter;
 
@@ -20,6 +21,15 @@ impl PolicyResult {
         match self {
             PolicyResult::Ok => res,
             x => x,
+        }
+    }
+    pub fn and_then(
+        self,
+        mut next: impl FnMut() -> Result<PolicyResult, Box<dyn Error>>,
+    ) -> Result<PolicyResult, Box<dyn Error>> {
+        match self {
+            PolicyResult::Ok => next(),
+            x => Ok(x),
         }
     }
     pub fn is_ok(&self) -> bool {

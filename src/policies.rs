@@ -70,37 +70,35 @@ pub fn verify_git_commits<G: Git, P: Gpg>(
         )?;
 
         if config.verify_email_addresses {
-            policy_result = policy_result.and(verify_email_addresses(
-                &config.author_domain,
-                &config.committer_domain,
-                &not_manually_verified_commits,
-            ));
+            policy_result = policy_result.and_then(|| {
+                Ok(verify_email_addresses(
+                    &config.author_domain,
+                    &config.committer_domain,
+                    &not_manually_verified_commits,
+                ))
+            })?;
         }
 
         if config.verify_commit_signatures {
-            policy_result = policy_result.and(verify_commit_signatures::<G, P>(
-                git,
-                &gpg,
-                &not_manually_verified_commits,
-                &mut keyring,
-            )?);
+            policy_result = policy_result.and_then(|| {
+                verify_commit_signatures::<G, P>(
+                    git,
+                    &gpg,
+                    &not_manually_verified_commits,
+                    &mut keyring,
+                )
+            })?;
         }
 
         if config.verify_different_authors {
-            policy_result = policy_result.and(verify_different_authors::<G>(
-                &all_commits,
-                git,
-                &ref_update,
-            )?);
+            policy_result = policy_result
+                .and_then(|| verify_different_authors::<G>(&all_commits, git, &ref_update))?;
         }
 
         if config.verify_rebased {
-            policy_result = policy_result.and(verify_rebased::<G>(
-                &all_commits,
-                git,
-                &ref_update,
-                &config.override_tag_pattern,
-            )?);
+            policy_result = policy_result.and_then(|| {
+                verify_rebased::<G>(&all_commits, git, &ref_update, &config.override_tag_pattern)
+            })?;
         }
     }
 
