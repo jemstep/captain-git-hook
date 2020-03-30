@@ -1,7 +1,7 @@
 use crate::error::CapnError;
 use crate::keyring::Keyring;
 use git2;
-use git2::{build::RepoBuilder, ErrorClass, ErrorCode, ObjectType, Oid, Repository};
+use git2::{ErrorClass, ErrorCode, ObjectType, Oid, Repository};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::error::Error;
@@ -508,11 +508,26 @@ impl TempRepo {
                     let src_path = src_repo.path().to_str().ok_or(Box::new(CapnError::new(
                         "Path to the repo being verified was not valid UTF-8",
                     )))?;
-                    return Ok(TempRepo {
-                        repo: RepoBuilder::new()
-                            .bare(true)
-                            .clone(src_path, &tmp_repo_path)?,
-                    });
+
+                    let result = Command::new("git")
+                        .arg("clone")
+                        .arg("--bare")
+                        .arg("--shared")
+                        .arg(src_path)
+                        .arg(&tmp_repo_path)
+                        .output()?;
+
+                    return if result.status.success() {
+                        Ok(TempRepo {
+                            repo: Repository::open(tmp_repo_path)?,
+                        })
+                    } else {
+                        debug!("Git clone Stderr: {:?}", String::from_utf8(result.stderr));
+                        Err(Box::new(CapnError::new(format!(
+                            "Call to git clone while creating temp repo failed with code {:?}",
+                            result.status.code()
+                        ))))
+                    };
                 }
             };
         }
